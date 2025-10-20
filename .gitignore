@@ -1,0 +1,39 @@
+# Ignore command files
+*.bat
+run.ps1
+commands.bat
+Makefile
+
+# Dependencies
+*/node_modules
+*/.bundle
+
+# Logs
+*/log/*
+*/tmp/*
+!*/log/.keep
+!*/tmp/.keep
+
+# Environment files
+*/.env
+*/.env.*
+
+# Database files
+*/db/*.sqlite3
+*/db/*.sqlite3-*
+
+# Ignore master key for decrypting credentials
+*/config/master.key
+
+# Ignore compiled assets
+*/public/assets
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
