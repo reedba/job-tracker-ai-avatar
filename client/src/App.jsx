@@ -3,6 +3,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import { darkTheme } from './theme/darkTheme';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
+import Dashboard from './components/dashboard/Dashboard';
 import { useSelector } from 'react-redux';
 
 // Configure axios defaults
@@ -40,7 +41,7 @@ function App() {
           {/* Protected routes - redirect to login if not authenticated */}
           <Route
             path="/dashboard"
-            element={token ? <div>Dashboard (Coming Soon)</div> : <Navigate to="/login" />}
+            element={token ? <Dashboard /> : <Navigate to="/login" />}
           />
 
           {/* Redirect root to login or dashboard based on auth state */}
