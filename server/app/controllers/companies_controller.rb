@@ -1,5 +1,6 @@
 class CompaniesController < ApplicationController
   include Authenticatable
+  before_action :authenticate_request
   before_action :set_company, only: [:show, :update, :destroy]
 
   def index
@@ -12,6 +13,8 @@ class CompaniesController < ApplicationController
   end
 
   def create
+    return render json: { error: 'User not authenticated' }, status: :unauthorized unless current_user
+
     @company = current_user.companies.build(company_params)
 
     if @company.save

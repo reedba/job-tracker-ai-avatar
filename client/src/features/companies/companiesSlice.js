@@ -18,10 +18,16 @@ export const createCompany = createAsyncThunk(
   'companies/createCompany',
   async (companyData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/companies', { company: companyData });
+      const response = await api.post('/companies', { 
+        company: {
+          name: companyData.name,
+          webpage: companyData.webpage
+        } 
+      });
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      const errorMessage = error.response?.data?.errors || error.response?.data?.error || 'Failed to create company';
+      return rejectWithValue(errorMessage);
     }
   }
 );
