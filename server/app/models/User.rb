@@ -8,7 +8,14 @@ class User < ApplicationRecord
   validates :email, presence: true, 
                    uniqueness: true,
                    format: { with: URI::MailTo::EMAIL_REGEXP }
-  validates :password, presence: true, on: :create
+  validates :password,
+            presence: true,
+            on: :create,
+            length: { minimum: 6 },
+            format: { 
+              with: /\A(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[A-Za-z\d!@#$%^&*(),.?":{}|<>]{6,}\z/,
+              message: 'must include at least one uppercase letter, one lowercase letter, one number, and one special character'
+            }
   validates :phone_number, uniqueness: true, 
                          format: { with: /\A\+?\d{10,15}\z/ }, 
                          allow_blank: true

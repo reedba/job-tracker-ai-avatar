@@ -1,35 +1,59 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import { darkTheme } from './theme/darkTheme';
+import Login from './components/auth/Login';
+import Register from './components/auth/Register';
+import { useSelector } from 'react-redux';
+
+// Configure axios defaults
+import axios from 'axios';
+axios.defaults.baseURL = 'http://localhost:3000/api'; // Your Rails API URL
+axios.defaults.headers.common['Accept'] = 'application/json';
+
+// Axios interceptor for JWT token
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { token } = useSelector((state) => state.auth);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <Router>
+        <Routes>
+          {/* Public routes */}
+          <Route
+            path="/login"
+            element={!token ? <Login /> : <Navigate to="/dashboard" />}
+          />
+          <Route
+            path="/register"
+            element={!token ? <Register /> : <Navigate to="/dashboard" />}
+          />
+
+          {/* Protected routes - redirect to login if not authenticated */}
+          <Route
+            path="/dashboard"
+            element={token ? <div>Dashboard (Coming Soon)</div> : <Navigate to="/login" />}
+          />
+
+          {/* Redirect root to login or dashboard based on auth state */}
+          <Route
+            path="/"
+            element={
+              <Navigate to={token ? '/dashboard' : '/login'} />
+            }
+          />
+        </Routes>
+      </Router>
+    </ThemeProvider>
+  );
 }
 
-export default App
+export default App;
