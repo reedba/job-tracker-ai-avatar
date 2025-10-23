@@ -1,6 +1,9 @@
 class User < ApplicationRecord
   has_secure_password
 
+  # Associations
+  has_many :companies, dependent: :destroy
+
   # Constants for roles
   AVAILABLE_ROLES = %w[user admin manager recruiter candidate superuser].freeze
 
