@@ -35,10 +35,10 @@ export const createCompany = createAsyncThunk(
     try {
       console.log('Creating company with data:', companyData);
       
-      // Add optimistic entry to state with all required fields
-      const tempId = Date.now();
+      // Create optimistic entry with temporary ID
+      const tempId = `temp-${Date.now()}`;
       const optimisticCompany = {
-        id: tempId, // Using number to match server response
+        id: tempId,
         name: companyData.name,
         webpage: companyData.webpage,
         favorited: false,
@@ -164,32 +164,21 @@ const companiesSlice = createSlice({
       })
       // Create company
       .addCase(createCompany.pending, (state) => {
-        // Don't change status on pending, keep existing state
         state.error = null;
       })
       .addCase(createCompany.fulfilled, (state, action) => {
         console.log('Create company fulfilled with payload:', action.payload);
         
-        // Find and replace the optimistic entry
-        const index = state.items.findIndex(item => 
-          typeof item.id !== 'number' || item.id === action.payload.id
-        );
+        // Find and remove any optimistic entries
+        state.items = state.items.filter(item => item.id.toString().indexOf('temp-') === -1);
         
-        if (index !== -1) {
-          // Replace the optimistic entry with the real one
-          state.items[index] = action.payload;
-        } else {
-          // If no optimistic entry found, add to start
-          state.items.unshift(action.payload);
-        }
+        // Add the new company at the start
+        state.items.unshift(action.payload);
         state.error = null;
       })
       .addCase(createCompany.rejected, (state, action) => {
-        // Remove only the failed optimistic entry
-        const tempId = action.meta.arg.tempId;
-        if (tempId) {
-          state.items = state.items.filter(item => item.id !== tempId);
-        }
+        // Remove any optimistic entries on error
+        state.items = state.items.filter(item => item.id.toString().indexOf('temp-') === -1);
         state.error = action.payload?.error || 'Failed to create company';
       });
   }
