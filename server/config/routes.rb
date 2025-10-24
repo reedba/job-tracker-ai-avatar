@@ -14,6 +14,11 @@ Rails.application.routes.draw do
     # Companies management
     resources :companies do
       resources :applications
+      resources :contacts do
+        member do
+          post :add_contact_date
+        end
+      end
     end
   end
 
