@@ -68,6 +68,17 @@ const companiesSlice = createSlice({
       if (index !== -1) {
         state.items[index] = { ...state.items[index], ...updates };
       }
+    },
+    optimisticUpdateApplicationCount: (state, action) => {
+      const { companyId, count, lastApplicationDate } = action.payload;
+      const index = state.items.findIndex(company => company.id === companyId);
+      if (index !== -1) {
+        state.items[index] = {
+          ...state.items[index],
+          applications_count: count,
+          last_application_date: lastApplicationDate
+        };
+      }
     }
   },
   extraReducers: (builder) => {
@@ -119,5 +130,8 @@ export const selectAllCompanies = (state) => state.companies.items;
 export const selectCompaniesStatus = (state) => state.companies.status;
 export const selectCompaniesError = (state) => state.companies.error;
 
-export const { optimisticUpdateCompany } = companiesSlice.actions;
+export const { 
+  optimisticUpdateCompany,
+  optimisticUpdateApplicationCount 
+} = companiesSlice.actions;
 export default companiesSlice.reducer;

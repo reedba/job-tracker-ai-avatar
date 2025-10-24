@@ -3,13 +3,36 @@ import api from '../../services/api';
 
 export const createApplication = createAsyncThunk(
   'applications/createApplication',
-  async ({ companyId, applicationData }, { rejectWithValue }) => {
+  async ({ companyId, applicationData }, { dispatch, rejectWithValue, getState }) => {
+    // Get current application count for optimistic update
+    const currentCompany = getState().companies.items.find(c => c.id === companyId);
+    const currentCount = currentCompany?.applications_count || 0;
+
+    // Optimistically update the application count
+    dispatch({
+      type: 'companies/optimisticUpdateApplicationCount',
+      payload: {
+        companyId,
+        count: currentCount + 1,
+        lastApplicationDate: new Date().toISOString()
+      }
+    });
+
     try {
       const response = await api.post(`/companies/${companyId}/applications`, {
         application: applicationData
       });
-      return { ...response.data, companyId }; // Include companyId in the response
+      return { ...response.data, companyId };
     } catch (error) {
+      // Revert the optimistic update on error
+      dispatch({
+        type: 'companies/optimisticUpdateApplicationCount',
+        payload: {
+          companyId,
+          count: currentCount,
+          lastApplicationDate: currentCompany?.last_application_date
+        }
+      });
       const errorMessage = error.response?.data?.errors || error.response?.data?.error || 'Failed to create application';
       return rejectWithValue(errorMessage);
     }
