@@ -3,6 +3,13 @@ class Company < ApplicationRecord
   belongs_to :user
   has_many :applications, dependent: :destroy
 
+  # Scopes
+  scope :with_last_application_date, -> {
+    select('companies.*, MAX(applications.date_submitted) as last_application_date')
+      .left_joins(:applications)
+      .group('companies.id')
+  }
+
   # Validations
   validates :name, presence: true
 

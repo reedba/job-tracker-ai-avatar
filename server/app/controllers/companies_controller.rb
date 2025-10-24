@@ -5,7 +5,15 @@ class CompaniesController < ApplicationController
 
   def index
     @companies = current_user.companies.includes(:applications)
-    render json: @companies, each_serializer: CompanySerializer
+    companies_data = ActiveModelSerializers::SerializableResource.new(
+      @companies,
+      each_serializer: CompanySerializer
+    ).as_json
+    
+    # Debug logging
+    Rails.logger.debug "Companies data: #{companies_data.inspect}"
+    
+    render json: companies_data
   end
 
   def show

@@ -61,7 +61,10 @@ const companiesSlice = createSlice({
       })
       .addCase(fetchCompanies.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items = action.payload.companies || action.payload;
+        // Handle both array and object responses
+        state.items = Array.isArray(action.payload) ? action.payload :
+                     action.payload.companies ? action.payload.companies :
+                     [];
         console.log('Fetched companies:', state.items); // Debug log
       })
       .addCase(fetchCompanies.rejected, (state, action) => {
@@ -81,9 +84,11 @@ const companiesSlice = createSlice({
       })
       // Handle application creation success
       .addCase(createApplication.fulfilled, (state, action) => {
-        const company = state.items.find(company => company.id === action.payload.companyId);
-        if (company) {
-          company.applications_count = (company.applications_count || 0) + 1;
+        if (action.payload.company) {
+          const index = state.items.findIndex(c => c.id === action.payload.company.id);
+          if (index !== -1) {
+            state.items[index] = action.payload.company;
+          }
         }
       });
   },

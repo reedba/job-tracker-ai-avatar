@@ -17,7 +17,11 @@ class ApplicationsController < ApplicationController
     @application = @company.applications.build(application_params)
 
     if @application.save
-      render json: @application, status: :created
+      # Return both the application and updated company data
+      render json: {
+        application: @application,
+        company: CompanySerializer.new(@company.reload)
+      }, status: :created
     else
       # Add more detailed error response
       error_messages = @application.errors.messages.transform_values(&:first)

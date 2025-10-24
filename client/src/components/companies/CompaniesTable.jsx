@@ -50,6 +50,11 @@ const CompaniesTable = () => {
     dispatch(fetchCompanies());
   }, [dispatch]);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Companies data:', companies);
+  }, [companies]);
+
   if (status === 'loading') {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -75,6 +80,7 @@ const CompaniesTable = () => {
             <TableCell>Company Name</TableCell>
             <TableCell>Website</TableCell>
             <TableCell align="center">Applications</TableCell>
+            <TableCell align="center">Last Application</TableCell>
             <TableCell align="center">Actions</TableCell>
           </TableRow>
         </TableHead>
@@ -116,8 +122,23 @@ const CompaniesTable = () => {
                   variant="body2"
                   sx={countBadgeStyle}
                 >
-                  {company.applications_count || 0}
+                  {typeof company.applications_count === 'number' ? company.applications_count : 0}
                 </Typography>
+              </TableCell>
+              <TableCell align="center">
+                {company.last_application_date ? (
+                  <Typography variant="body2">
+                    {new Date(company.last_application_date).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No applications
+                  </Typography>
+                )}
               </TableCell>
               <TableCell align="center">
                 <Button
