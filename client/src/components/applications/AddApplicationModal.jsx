@@ -48,11 +48,18 @@ const AddApplicationModal = ({ open, onClose, companyId, companyName }) => {
 
   const handleSubmit = async () => {
     try {
+      const dateToSubmit = formData.date_submitted;
+      console.log('Submitting date:', {
+        originalDate: dateToSubmit,
+        isoString: dateToSubmit.toISOString(),
+        fullDate: dateToSubmit.toString()
+      });
+
       await dispatch(createApplication({ 
         companyId, 
         applicationData: {
           ...formData,
-          date_submitted: formData.date_submitted.toISOString().split('T')[0]
+          date_submitted: dateToSubmit.toISOString()
         }
       })).unwrap();
       

@@ -28,10 +28,11 @@ const CompaniesTable = () => {
   const error = useSelector(selectCompaniesError);
 
   useEffect(() => {
-    if (status === 'idle') {
+    // Only fetch if we don't have any companies and status is idle
+    if (status === 'idle' && companies.length === 0) {
       dispatch(fetchCompanies());
     }
-  }, [status, dispatch]);
+  }, [status, companies.length, dispatch]);
 
   const handleToggleFavorite = (company) => {
     dispatch(updateCompany({

@@ -9,6 +9,6 @@ class CompanySerializer < ActiveModel::Serializer
   def last_application_date
     return nil if object.applications.empty?
     latest = object.applications.max_by(&:date_submitted)
-    latest&.date_submitted&.to_date&.iso8601
+    latest&.date_submitted&.iso8601
   end
 end

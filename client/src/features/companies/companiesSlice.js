@@ -31,9 +31,13 @@ export const fetchCompanies = createAsyncThunk(
 
 export const createCompany = createAsyncThunk(
   'companies/createCompany',
-  async (companyData) => {
-    const response = await api.post('/companies', { company: companyData });
-    return response.data;
+  async (companyData, { dispatch, rejectWithValue }) => {
+    try {
+      const response = await api.post('/companies', { company: companyData });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || 'Failed to create company');
+    }
   }
 );
 
@@ -79,6 +83,12 @@ const companiesSlice = createSlice({
           last_application_date: lastApplicationDate
         };
       }
+    },
+    optimisticAddCompany: (state, action) => {
+      state.items.unshift(action.payload);
+    },
+    removeOptimisticCompany: (state, action) => {
+      state.items = state.items.filter(company => company.id !== action.payload);
     }
   },
   extraReducers: (builder) => {
@@ -117,11 +127,13 @@ const companiesSlice = createSlice({
       })
       .addCase(createCompany.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items.push(action.payload);
+        // Add new company to the beginning of the list
+        state.items.unshift(action.payload);
+        state.error = null;
       })
       .addCase(createCompany.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.error.message;
+        state.error = action.payload || action.error.message;
       });
   }
 });
@@ -132,6 +144,8 @@ export const selectCompaniesError = (state) => state.companies.error;
 
 export const { 
   optimisticUpdateCompany,
-  optimisticUpdateApplicationCount 
+  optimisticUpdateApplicationCount,
+  optimisticAddCompany,
+  removeOptimisticCompany
 } = companiesSlice.actions;
 export default companiesSlice.reducer;

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Typography, Container, Button, Box } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
 import Layout from '../layout/Layout';
 import CompaniesTable from '../companies/CompaniesTable';
 import AddCompanyModal from '../companies/AddCompanyModal';
@@ -26,14 +25,6 @@ const Dashboard = () => {
           <Typography variant="h4" gutterBottom>
             Companies
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleOpenAddModal}
-          >
-            Add Company
-          </Button>
         </Box>
         <CompaniesTable />
         <AddCompanyModal

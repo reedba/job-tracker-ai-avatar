@@ -22,6 +22,7 @@ import {
 import { Star, StarBorder, FilterList } from '@mui/icons-material';
 import { fetchCompanies, updateCompany, optimisticUpdateCompany } from '../../features/companies/companiesSlice';
 import AddApplicationModal from '../applications/AddApplicationModal';
+import AddCompanyModal from './AddCompanyModal';
 import TableFilters from './TableFilters';
 
 const countBadgeStyle = {
@@ -35,15 +36,13 @@ const countBadgeStyle = {
 
 const CompaniesTable = () => {
   const dispatch = useDispatch();
-  console.log('CompaniesTable rendered');
-  const companiesState = useSelector((state) => {
-    console.log('Companies state:', state.companies);
-    return state.companies;
-  });
+  const companiesState = useSelector((state) => state.companies);
   const { items: companies, status, error } = companiesState;
-  console.log('Destructured values:', { companies, status, error });
+
+  // State declarations
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
+  const [isAddCompanyModalOpen, setIsAddCompanyModalOpen] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
     applicationStatus: {
@@ -90,25 +89,6 @@ const CompaniesTable = () => {
     }));
   };
 
-  const safeCompanies = Array.isArray(companies) ? companies : [];
-  const filteredCompanies = safeCompanies.filter(company => {
-    // Search filter
-    if (filters.search && !company.name.toLowerCase().includes(filters.search.toLowerCase())) {
-      return false;
-    }
-
-    // Applications filter
-    const hasApplications = (company.applications_count || 0) > 0;
-    if (!filters.applicationStatus.hasApplications && hasApplications) return false;
-    if (!filters.applicationStatus.noApplications && !hasApplications) return false;
-
-    // Favorited filter
-    if (!filters.favoriteStatus.favorited && company.favorited) return false;
-    if (!filters.favoriteStatus.notFavorited && !company.favorited) return false;
-
-    return true;
-  });
-
   const handleOpenApplicationModal = (company) => {
     setSelectedCompany(company);
     setIsApplicationModalOpen(true);
@@ -119,10 +99,13 @@ const CompaniesTable = () => {
     setIsApplicationModalOpen(false);
   };
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Companies data:', companies);
-  }, [companies]);
+  const handleOpenAddCompanyModal = () => {
+    setIsAddCompanyModalOpen(true);
+  };
+
+  const handleCloseAddCompanyModal = () => {
+    setIsAddCompanyModalOpen(false);
+  };
 
   if (status === 'loading') {
     return (
@@ -140,13 +123,49 @@ const CompaniesTable = () => {
     );
   }
 
+  const safeCompanies = Array.isArray(companies) ? companies : [];
+  const filteredCompanies = safeCompanies.filter(company => {
+    if (filters.search && !company.name.toLowerCase().includes(filters.search.toLowerCase())) {
+      return false;
+    }
+
+    const hasApplications = (company.applications_count || 0) > 0;
+    if (!filters.applicationStatus.hasApplications && hasApplications) return false;
+    if (!filters.applicationStatus.noApplications && !hasApplications) return false;
+
+    if (!filters.favoriteStatus.favorited && company.favorited) return false;
+    if (!filters.favoriteStatus.notFavorited && !company.favorited) return false;
+
+    return true;
+  });
+
   return (
     <Box>
-      <TableFilters 
-        searchValue={filters.search}
-        onSearchChange={(value) => setFilters(prev => ({ ...prev, search: value }))}
-      />
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
+      {/* Header section with search and add button */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3,
+        gap: 2
+      }}>
+        <Box sx={{ flexGrow: 1 }}>
+          <TableFilters 
+            searchValue={filters.search}
+            onSearchChange={(value) => setFilters(prev => ({ ...prev, search: value }))}
+          />
+        </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleOpenAddCompanyModal}
+        >
+          Add Company
+        </Button>
+      </Box>
+
+      {/* Table section */}
+      <TableContainer component={Paper}>
         <Table sx={{ minWidth: 650 }} aria-label="companies table">
           <TableHead>
             <TableRow>
@@ -294,7 +313,8 @@ const CompaniesTable = () => {
                       {new Date(company.last_application_date).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'short',
-                        day: 'numeric'
+                        day: '2-digit',
+                        timeZone: 'UTC'
                       })}
                     </Typography>
                   ) : (
@@ -317,6 +337,8 @@ const CompaniesTable = () => {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Modals */}
       {selectedCompany && (
         <AddApplicationModal
           open={isApplicationModalOpen}
@@ -325,6 +347,10 @@ const CompaniesTable = () => {
           companyName={selectedCompany.name}
         />
       )}
+      <AddCompanyModal
+        open={isAddCompanyModalOpen}
+        onClose={handleCloseAddCompanyModal}
+      />
     </Box>
   );
 };

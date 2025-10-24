@@ -8,13 +8,24 @@ export const createApplication = createAsyncThunk(
     const currentCompany = getState().companies.items.find(c => c.id === companyId);
     const currentCount = currentCompany?.applications_count || 0;
 
-    // Optimistically update the application count
+    // Create a new Date object from the submission date and keep full ISO string
+    const submissionDate = new Date(applicationData.date_submitted);
+    const formattedDate = submissionDate.toISOString();
+    
+    console.log('Application creation:', {
+      originalDate: applicationData.date_submitted,
+      submissionDate: submissionDate,
+      formattedDate: formattedDate,
+      currentCompanyDate: currentCompany?.last_application_date
+    });
+
+    // Optimistically update the application count with the formatted date
     dispatch({
       type: 'companies/optimisticUpdateApplicationCount',
       payload: {
         companyId,
         count: currentCount + 1,
-        lastApplicationDate: new Date().toISOString()
+        lastApplicationDate: formattedDate
       }
     });
 

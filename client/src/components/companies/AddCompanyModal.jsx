@@ -15,6 +15,7 @@ const AddCompanyModal = ({ open, onClose }) => {
     webpage: ''
   });
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,26 +46,48 @@ const AddCompanyModal = ({ open, onClose }) => {
 
   const handleSubmit = async () => {
     if (validateForm()) {
+      setIsSubmitting(true);
       try {
-        await dispatch(createCompany(formData)).unwrap();
+        const result = await dispatch(createCompany(formData)).unwrap();
+        console.log('Company created:', result);
+        // Reset form state
         setFormData({ name: '', webpage: '' });
+        setErrors({});
+        // Close modal after successful creation
         onClose();
       } catch (error) {
+        console.error('Error creating company:', error);
+        const errorMessage = 
+          typeof error === 'string' ? error :
+          error.errors?.[0] ||
+          error.error ||
+          'Failed to create company. Please try again.';
         setErrors(prev => ({
           ...prev,
-          submit: 'Failed to create company. Please try again.'
+          submit: errorMessage
         }));
+      } finally {
+        setIsSubmitting(false);
       }
     }
   };
 
   const modalActions = (
     <>
-      <Button onClick={onClose} color="inherit">
+      <Button 
+        onClick={onClose} 
+        color="inherit" 
+        disabled={isSubmitting}
+      >
         Cancel
       </Button>
-      <Button onClick={handleSubmit} variant="contained" color="primary">
-        Add Company
+      <Button 
+        onClick={handleSubmit} 
+        variant="contained" 
+        color="primary"
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? 'Adding...' : 'Add Company'}
       </Button>
     </>
   );

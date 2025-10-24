@@ -9,11 +9,11 @@ const TableFilters = ({ searchValue, onSearchChange }) => {
 
   return (
     <Box sx={{ 
-      mb: 3, 
       display: 'flex', 
       gap: 2, 
       alignItems: 'center',
-      flexWrap: 'wrap' 
+      flexWrap: 'wrap',
+      width: '100%'
     }}>
       <TextField
         placeholder="Search companies..."
