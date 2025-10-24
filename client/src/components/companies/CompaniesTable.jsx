@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Table,
@@ -12,13 +12,27 @@ import {
   Typography,
   CircularProgress,
   Box,
+  Button,
 } from '@mui/material';
 import { Star, StarBorder } from '@mui/icons-material';
 import { fetchCompanies, updateCompany } from '../../features/companies/companiesSlice';
+import AddApplicationModal from '../applications/AddApplicationModal';
 
 const CompaniesTable = () => {
   const dispatch = useDispatch();
   const { items: companies, status, error } = useSelector((state) => state.companies);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
+
+  const handleOpenApplicationModal = (company) => {
+    setSelectedCompany(company);
+    setIsApplicationModalOpen(true);
+  };
+
+  const handleCloseApplicationModal = () => {
+    setSelectedCompany(null);
+    setIsApplicationModalOpen(false);
+  };
 
   useEffect(() => {
     if (status === 'idle') {
@@ -50,6 +64,7 @@ const CompaniesTable = () => {
             <TableCell>Favorite</TableCell>
             <TableCell>Company Name</TableCell>
             <TableCell>Website</TableCell>
+            <TableCell align="center">Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -85,10 +100,27 @@ const CompaniesTable = () => {
                   'N/A'
                 )}
               </TableCell>
+              <TableCell align="center">
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => handleOpenApplicationModal(company)}
+                >
+                  Add Application
+                </Button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+      {selectedCompany && (
+        <AddApplicationModal
+          open={isApplicationModalOpen}
+          onClose={handleCloseApplicationModal}
+          companyId={selectedCompany.id}
+          companyName={selectedCompany.name}
+        />
+      )}
     </TableContainer>
   );
 };

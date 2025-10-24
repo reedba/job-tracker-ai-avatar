@@ -1,6 +1,7 @@
 class Company < ApplicationRecord
   # Associations
   belongs_to :user
+  has_many :applications, dependent: :destroy
 
   # Validations
   validates :name, presence: true

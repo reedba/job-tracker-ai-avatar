@@ -10,9 +10,26 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_10_23_160045) do
+ActiveRecord::Schema[8.0].define(version: 2025_10_23_235100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "applications", force: :cascade do |t|
+    t.string "title", null: false
+    t.string "job_level"
+    t.date "date_submitted", null: false
+    t.string "employment_type", default: "direct_hire"
+    t.string "work_mode", default: "onsite"
+    t.string "job_posting_url"
+    t.string "job_external_id"
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "job_external_id"], name: "index_applications_on_company_id_and_job_external_id", unique: true, where: "(job_external_id IS NOT NULL)"
+    t.index ["company_id"], name: "index_applications_on_company_id"
+    t.check_constraint "employment_type::text = ANY (ARRAY['contractor'::character varying, 'direct_hire'::character varying]::text[])", name: "check_valid_employment_type"
+    t.check_constraint "work_mode::text = ANY (ARRAY['remote'::character varying, 'hybrid'::character varying, 'onsite'::character varying]::text[])", name: "check_valid_work_mode"
+  end
 
   create_table "companies", force: :cascade do |t|
     t.string "name", null: false
@@ -39,5 +56,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_23_160045) do
     t.index ["roles"], name: "index_users_on_roles", using: :gin
   end
 
+  add_foreign_key "applications", "companies"
   add_foreign_key "companies", "users"
 end

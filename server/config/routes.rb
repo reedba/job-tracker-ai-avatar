@@ -12,7 +12,9 @@ Rails.application.routes.draw do
     get '/me', to: 'sessions#show'
 
     # Companies management
-    resources :companies
+    resources :companies do
+      resources :applications
+    end
   end
 
   # Health check endpoint
