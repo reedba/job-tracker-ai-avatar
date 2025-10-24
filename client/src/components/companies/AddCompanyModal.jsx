@@ -48,10 +48,19 @@ const AddCompanyModal = ({ open, onClose }) => {
     if (validateForm()) {
       setIsSubmitting(true);
       try {
-        const result = await dispatch(createCompany(formData)).unwrap();
-        console.log('Company created:', result);
-        // Reset form state
-        setFormData({ name: '', webpage: '' });
+        const companyData = {
+          name: formData.name.trim(),
+          webpage: formData.webpage ? formData.webpage.trim() : null
+        };
+
+        console.log('Submitting company data:', companyData);
+        await dispatch(createCompany(companyData)).unwrap();
+        
+        // Reset form and close modal on success
+        setFormData({
+          name: '',
+          webpage: ''
+        });
         setErrors({});
         // Close modal after successful creation
         onClose();

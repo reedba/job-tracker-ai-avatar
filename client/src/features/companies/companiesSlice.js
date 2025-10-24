@@ -33,10 +33,47 @@ export const createCompany = createAsyncThunk(
   'companies/createCompany',
   async (companyData, { dispatch, rejectWithValue }) => {
     try {
-      const response = await api.post('/companies', { company: companyData });
-      return response.data;
+      console.log('Creating company with data:', companyData);
+      
+      // Add optimistic entry to state with all required fields
+      const tempId = Date.now();
+      const optimisticCompany = {
+        id: tempId, // Using number to match server response
+        name: companyData.name,
+        webpage: companyData.webpage,
+        favorited: false,
+        applications_count: 0,
+        last_application_date: null,
+        location: null,
+        notes: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('Adding optimistic company:', optimisticCompany);
+      dispatch(companiesSlice.actions.optimisticAddCompany(optimisticCompany));
+
+      // Create the new company on the server
+      const response = await api.post('/companies', { 
+        company: {
+          name: companyData.name,
+          webpage: companyData.webpage
+        } 
+      });
+      
+      console.log('Server response:', response.data);
+      // Extract the company data from the nested response
+      return response.data.company;
     } catch (error) {
-      return rejectWithValue(error.response?.data || 'Failed to create company');
+      // Get error message from server response
+      const errorMessage = error.response?.data?.errors?.[0] || 
+                         error.response?.data?.error || 
+                         error.message || 
+                         'Failed to create company';
+      return rejectWithValue({
+        error: errorMessage,
+        tempId
+      });
     }
   }
 );
@@ -96,10 +133,14 @@ const companiesSlice = createSlice({
       // Fetch companies
       .addCase(fetchCompanies.pending, (state) => {
         state.status = 'loading';
+        // Don't clear items on loading, preserve existing data
       })
       .addCase(fetchCompanies.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items = action.payload;
+        // Merge new items with existing ones, avoiding duplicates
+        const existingIds = new Set(state.items.map(item => item.id));
+        const newItems = action.payload.filter(item => !existingIds.has(item.id));
+        state.items = [...state.items, ...newItems];
       })
       .addCase(fetchCompanies.rejected, (state, action) => {
         state.status = 'failed';
@@ -123,17 +164,33 @@ const companiesSlice = createSlice({
       })
       // Create company
       .addCase(createCompany.pending, (state) => {
-        // Don't change the status when creating a company
+        // Don't change status on pending, keep existing state
         state.error = null;
       })
       .addCase(createCompany.fulfilled, (state, action) => {
-        // Keep the existing status
-        state.items = [action.payload, ...state.items];
+        console.log('Create company fulfilled with payload:', action.payload);
+        
+        // Find and replace the optimistic entry
+        const index = state.items.findIndex(item => 
+          typeof item.id !== 'number' || item.id === action.payload.id
+        );
+        
+        if (index !== -1) {
+          // Replace the optimistic entry with the real one
+          state.items[index] = action.payload;
+        } else {
+          // If no optimistic entry found, add to start
+          state.items.unshift(action.payload);
+        }
         state.error = null;
       })
       .addCase(createCompany.rejected, (state, action) => {
-        // Keep the existing status on error
-        state.error = action.payload || action.error.message;
+        // Remove only the failed optimistic entry
+        const tempId = action.meta.arg.tempId;
+        if (tempId) {
+          state.items = state.items.filter(item => item.id !== tempId);
+        }
+        state.error = action.payload?.error || 'Failed to create company';
       });
   }
 });
