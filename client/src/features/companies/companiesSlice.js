@@ -123,16 +123,16 @@ const companiesSlice = createSlice({
       })
       // Create company
       .addCase(createCompany.pending, (state) => {
-        state.status = 'loading';
+        // Don't change the status when creating a company
+        state.error = null;
       })
       .addCase(createCompany.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        // Add new company to the beginning of the list
-        state.items.unshift(action.payload);
+        // Keep the existing status
+        state.items = [action.payload, ...state.items];
         state.error = null;
       })
       .addCase(createCompany.rejected, (state, action) => {
-        state.status = 'failed';
+        // Keep the existing status on error
         state.error = action.payload || action.error.message;
       });
   }
