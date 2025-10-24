@@ -6,7 +6,10 @@ import CompaniesTable from '../companies/CompaniesTable';
 import AddCompanyModal from '../companies/AddCompanyModal';
 
 const Dashboard = () => {
+  console.log('Dashboard rendered');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const token = localStorage.getItem('token');
+  console.log('Current token:', token);
 
   const handleOpenAddModal = () => {
     setIsAddModalOpen(true);

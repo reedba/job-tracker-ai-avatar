@@ -33,10 +33,22 @@ class CompaniesController < ApplicationController
   end
 
   def update
-    if @company.update(company_params)
-      render json: @company
-    else
-      render json: { errors: @company.errors.full_messages }, status: :unprocessable_entity
+    Rails.logger.info "==== Updating Company ===="
+    Rails.logger.info "Params: #{params.inspect}"
+    Rails.logger.info "Company params: #{company_params.inspect}"
+    Rails.logger.info "Current company state: #{@company.inspect}"
+    
+    begin
+      if @company.update(company_params)
+        Rails.logger.info "Successfully updated company: #{@company.reload.inspect}"
+        render json: @company
+      else
+        Rails.logger.error "Failed to update company: #{@company.errors.full_messages}"
+        render json: { errors: @company.errors.full_messages }, status: :unprocessable_entity
+      end
+    rescue => e
+      Rails.logger.error "Error updating company: #{e.message}\n#{e.backtrace.join("\n")}"
+      render json: { error: "Failed to update company: #{e.message}" }, status: :internal_server_error
     end
   end
 

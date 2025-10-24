@@ -6,19 +6,8 @@ import Register from './components/auth/Register';
 import Dashboard from './components/dashboard/Dashboard';
 import { useSelector } from 'react-redux';
 
-// Configure axios defaults
 import axios from 'axios';
-axios.defaults.baseURL = 'http://localhost:3000/api'; // Your Rails API URL
-axios.defaults.headers.common['Accept'] = 'application/json';
-
-// Axios interceptor for JWT token
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Remove axios configuration since it's handled in api.js
 
 function App() {
   const { token } = useSelector((state) => state.auth);

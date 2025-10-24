@@ -1,47 +1,56 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import api from '../../services/api';
 import { createApplication } from '../applications/applicationsSlice';
+import api from '../../services/api';
 
-// Async thunks
 export const fetchCompanies = createAsyncThunk(
   'companies/fetchCompanies',
-  async (_, { rejectWithValue }) => {
+  async () => {
+    console.log('Fetching companies...');
     try {
       const response = await api.get('/companies');
-      return response.data;
+      console.log('Companies response structure:', {
+        type: typeof response.data,
+        value: response.data,
+        keys: Object.keys(response.data),
+      });
+      // If the response is an object with a companies key, return the array
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      } else if (response.data && typeof response.data === 'object') {
+        // If it's just an object, wrap it in an array
+        return Array.isArray(response.data.companies) ? response.data.companies : [];
+      }
+      // Fallback to empty array if data structure is unexpected
+      return [];
     } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+      console.error('Error fetching companies:', error);
+      throw error;
     }
   }
 );
 
 export const createCompany = createAsyncThunk(
   'companies/createCompany',
-  async (companyData, { rejectWithValue }) => {
-    try {
-      const response = await api.post('/companies', { 
-        company: {
-          name: companyData.name,
-          webpage: companyData.webpage
-        } 
-      });
-      return response.data;
-    } catch (error) {
-      const errorMessage = error.response?.data?.errors || error.response?.data?.error || 'Failed to create company';
-      return rejectWithValue(errorMessage);
-    }
+  async (companyData) => {
+    const response = await api.post('/companies', { company: companyData });
+    return response.data;
   }
 );
 
 export const updateCompany = createAsyncThunk(
   'companies/updateCompany',
-  async ({ id, updates }, { rejectWithValue }) => {
-    try {
-      const response = await api.patch(`/companies/${id}`, { company: updates });
-      return response.data;
-    } catch (error) {
-      return rejectWithValue(error.response?.data || error.message);
+  async ({ id, updates }) => {
+    // Transform the updates to match what the Rails API expects
+    const apiUpdates = {};
+    if (updates.favorited !== undefined) {
+      apiUpdates.favorited = updates.favorited;
     }
+    if (updates.webpage !== undefined) {
+      apiUpdates.webpage = updates.webpage;
+    }
+    // Add other fields as needed
+    const response = await api.patch(`/companies/${id}`, { company: apiUpdates });
+    return response.data;
   }
 );
 
@@ -49,10 +58,18 @@ const companiesSlice = createSlice({
   name: 'companies',
   initialState: {
     items: [],
-    status: 'loading', // 'loading' | 'succeeded' | 'failed'
-    error: null,
+    status: 'idle',
+    error: null
   },
-  reducers: {},
+  reducers: {
+    optimisticUpdateCompany: (state, action) => {
+      const { id, updates } = action.payload;
+      const index = state.items.findIndex(company => company.id === id);
+      if (index !== -1) {
+        state.items[index] = { ...state.items[index], ...updates };
+      }
+    }
+  },
   extraReducers: (builder) => {
     builder
       // Fetch companies
@@ -61,19 +78,11 @@ const companiesSlice = createSlice({
       })
       .addCase(fetchCompanies.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        // Handle both array and object responses
-        state.items = Array.isArray(action.payload) ? action.payload :
-                     action.payload.companies ? action.payload.companies :
-                     [];
-        console.log('Fetched companies:', state.items); // Debug log
+        state.items = action.payload;
       })
       .addCase(fetchCompanies.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
-      })
-      // Create company
-      .addCase(createCompany.fulfilled, (state, action) => {
-        state.items.push(action.payload);
+        state.error = action.error.message;
       })
       // Update company
       .addCase(updateCompany.fulfilled, (state, action) => {
@@ -82,16 +91,33 @@ const companiesSlice = createSlice({
           state.items[index] = action.payload;
         }
       })
-      // Handle application creation success
+      // Handle application creation
       .addCase(createApplication.fulfilled, (state, action) => {
         if (action.payload.company) {
-          const index = state.items.findIndex(c => c.id === action.payload.company.id);
+          const index = state.items.findIndex(company => company.id === action.payload.company.id);
           if (index !== -1) {
             state.items[index] = action.payload.company;
           }
         }
+      })
+      // Create company
+      .addCase(createCompany.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(createCompany.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.items.push(action.payload);
+      })
+      .addCase(createCompany.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.error.message;
       });
-  },
+  }
 });
 
+export const selectAllCompanies = (state) => state.companies.items;
+export const selectCompaniesStatus = (state) => state.companies.status;
+export const selectCompaniesError = (state) => state.companies.error;
+
+export const { optimisticUpdateCompany } = companiesSlice.actions;
 export default companiesSlice.reducer;

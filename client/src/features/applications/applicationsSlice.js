@@ -44,9 +44,10 @@ const applicationsSlice = createSlice({
         if (!state.byCompany[companyId]) {
           state.byCompany[companyId] = [];
         }
-        // Handle both response formats
-        const application = action.payload.application || action.payload;
-        state.byCompany[companyId].push(application);
+        const application = action.payload.application;
+        if (application) {
+          state.byCompany[companyId].push(application);
+        }
       });
   },
 });
