@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_10_23_235100) do
+ActiveRecord::Schema[8.0].define(version: 2025_10_24_150249) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -25,7 +25,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_23_235100) do
     t.bigint "company_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["company_id", "job_external_id"], name: "index_applications_on_company_id_and_job_external_id", unique: true, where: "(job_external_id IS NOT NULL)"
+    t.index ["company_id", "job_external_id"], name: "index_applications_on_company_id_and_job_external_id", unique: true, where: "((job_external_id IS NOT NULL) AND ((job_external_id)::text <> ''::text))"
     t.index ["company_id"], name: "index_applications_on_company_id"
     t.check_constraint "employment_type::text = ANY (ARRAY['contractor'::character varying, 'direct_hire'::character varying]::text[])", name: "check_valid_employment_type"
     t.check_constraint "work_mode::text = ANY (ARRAY['remote'::character varying, 'hybrid'::character varying, 'onsite'::character varying]::text[])", name: "check_valid_work_mode"
@@ -38,6 +38,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_23_235100) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.boolean "favorited", default: false, null: false
+    t.integer "applications_count", default: 0, null: false
     t.index ["user_id"], name: "index_companies_on_user_id"
   end
 

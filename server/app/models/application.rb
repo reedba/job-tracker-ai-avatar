@@ -1,11 +1,13 @@
 class Application < ApplicationRecord
   # Associations
-  belongs_to :company
+  belongs_to :company, counter_cache: true
 
   # Validations
   validates :title, presence: true
   validates :date_submitted, presence: true
-  validates :job_external_id, uniqueness: { scope: :company_id }, allow_nil: true
+  validates :job_external_id, 
+            uniqueness: { scope: :company_id }, 
+            allow_blank: true # This allows both nil and empty strings
   
   # Enums for standardized values
   enum :job_level, {

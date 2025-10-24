@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
+import { createApplication } from '../applications/applicationsSlice';
 
 // Async thunks
 export const fetchCompanies = createAsyncThunk(
@@ -48,7 +49,7 @@ const companiesSlice = createSlice({
   name: 'companies',
   initialState: {
     items: [],
-    status: 'idle', // 'idle' | 'loading' | 'succeeded' | 'failed'
+    status: 'loading', // 'loading' | 'succeeded' | 'failed'
     error: null,
   },
   reducers: {},
@@ -60,7 +61,8 @@ const companiesSlice = createSlice({
       })
       .addCase(fetchCompanies.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.items = action.payload;
+        state.items = action.payload.companies || action.payload;
+        console.log('Fetched companies:', state.items); // Debug log
       })
       .addCase(fetchCompanies.rejected, (state, action) => {
         state.status = 'failed';
@@ -75,6 +77,13 @@ const companiesSlice = createSlice({
         const index = state.items.findIndex(company => company.id === action.payload.id);
         if (index !== -1) {
           state.items[index] = action.payload;
+        }
+      })
+      // Handle application creation success
+      .addCase(createApplication.fulfilled, (state, action) => {
+        const company = state.items.find(company => company.id === action.payload.companyId);
+        if (company) {
+          company.applications_count = (company.applications_count || 0) + 1;
         }
       });
   },

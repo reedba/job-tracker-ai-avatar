@@ -4,8 +4,8 @@ class CompaniesController < ApplicationController
   before_action :set_company, only: [:show, :update, :destroy]
 
   def index
-    @companies = current_user.companies
-    render json: @companies
+    @companies = current_user.companies.includes(:applications)
+    render json: @companies, each_serializer: CompanySerializer
   end
 
   def show

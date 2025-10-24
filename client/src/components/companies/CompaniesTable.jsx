@@ -18,11 +18,23 @@ import { Star, StarBorder } from '@mui/icons-material';
 import { fetchCompanies, updateCompany } from '../../features/companies/companiesSlice';
 import AddApplicationModal from '../applications/AddApplicationModal';
 
+const countBadgeStyle = {
+  display: 'inline-block',
+  minWidth: '24px',
+  padding: '4px 8px',
+  borderRadius: '12px',
+  backgroundColor: 'primary.main',
+  color: 'primary.contrastText'
+};
+
 const CompaniesTable = () => {
   const dispatch = useDispatch();
-  const { items: companies, status, error } = useSelector((state) => state.companies);
+  const companiesState = useSelector((state) => state.companies);
+  const { items: companies, status, error } = companiesState;
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
+
+  console.log('Companies State:', companiesState); // Debug log
 
   const handleOpenApplicationModal = (company) => {
     setSelectedCompany(company);
@@ -35,10 +47,8 @@ const CompaniesTable = () => {
   };
 
   useEffect(() => {
-    if (status === 'idle') {
-      dispatch(fetchCompanies());
-    }
-  }, [status, dispatch]);
+    dispatch(fetchCompanies());
+  }, [dispatch]);
 
   if (status === 'loading') {
     return (
@@ -64,6 +74,7 @@ const CompaniesTable = () => {
             <TableCell>Favorite</TableCell>
             <TableCell>Company Name</TableCell>
             <TableCell>Website</TableCell>
+            <TableCell align="center">Applications</TableCell>
             <TableCell align="center">Actions</TableCell>
           </TableRow>
         </TableHead>
@@ -99,6 +110,14 @@ const CompaniesTable = () => {
                 ) : (
                   'N/A'
                 )}
+              </TableCell>
+              <TableCell align="center">
+                <Typography
+                  variant="body2"
+                  sx={countBadgeStyle}
+                >
+                  {company.applications_count || 0}
+                </Typography>
               </TableCell>
               <TableCell align="center">
                 <Button

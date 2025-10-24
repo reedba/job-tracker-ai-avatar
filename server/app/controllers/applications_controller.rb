@@ -19,7 +19,12 @@ class ApplicationsController < ApplicationController
     if @application.save
       render json: @application, status: :created
     else
-      render json: { errors: @application.errors.full_messages }, status: :unprocessable_entity
+      # Add more detailed error response
+      error_messages = @application.errors.messages.transform_values(&:first)
+      render json: { 
+        message: 'Validation failed',
+        errors: error_messages
+      }, status: :unprocessable_entity
     end
   end
 

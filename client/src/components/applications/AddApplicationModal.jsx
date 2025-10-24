@@ -16,17 +16,19 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import ReusableModal from '../common/ReusableModal';
 import { createApplication } from '../../features/applications/applicationsSlice';
 
+const initialFormState = {
+  title: '',
+  job_level: 'mid',
+  date_submitted: new Date(),
+  employment_type: 'direct_hire',
+  work_mode: 'onsite',
+  job_posting_url: '',
+  job_external_id: ''
+};
+
 const AddApplicationModal = ({ open, onClose, companyId, companyName }) => {
   const dispatch = useDispatch();
-  const [formData, setFormData] = useState({
-    title: '',
-    job_level: 'mid',
-    date_submitted: new Date(),
-    employment_type: 'direct_hire',
-    work_mode: 'onsite',
-    job_posting_url: '',
-    job_external_id: ''
-  });
+  const [formData, setFormData] = useState(initialFormState);
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
@@ -53,16 +55,10 @@ const AddApplicationModal = ({ open, onClose, companyId, companyName }) => {
           date_submitted: formData.date_submitted.toISOString().split('T')[0]
         }
       })).unwrap();
+      
+      // Reset form and close modal
+      setFormData({ ...initialFormState, date_submitted: new Date() });
       onClose();
-      setFormData({
-        title: '',
-        job_level: 'mid',
-        date_submitted: new Date(),
-        employment_type: 'direct_hire',
-        work_mode: 'onsite',
-        job_posting_url: '',
-        job_external_id: ''
-      });
     } catch (err) {
       setError(typeof err === 'string' ? err : 'Failed to create application');
     }

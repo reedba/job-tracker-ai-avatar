@@ -8,7 +8,7 @@ export const createApplication = createAsyncThunk(
       const response = await api.post(`/companies/${companyId}/applications`, {
         application: applicationData
       });
-      return response.data;
+      return { ...response.data, companyId }; // Include companyId in the response
     } catch (error) {
       const errorMessage = error.response?.data?.errors || error.response?.data?.error || 'Failed to create application';
       return rejectWithValue(errorMessage);
@@ -31,23 +31,13 @@ export const fetchApplications = createAsyncThunk(
 const applicationsSlice = createSlice({
   name: 'applications',
   initialState: {
-    byCompany: {},
-    status: 'idle',
-    error: null,
+    byCompany: {}
   },
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchApplications.pending, (state) => {
-        state.status = 'loading';
-      })
       .addCase(fetchApplications.fulfilled, (state, action) => {
-        state.status = 'succeeded';
         state.byCompany[action.payload.companyId] = action.payload.applications;
-      })
-      .addCase(fetchApplications.rejected, (state, action) => {
-        state.status = 'failed';
-        state.error = action.payload;
       })
       .addCase(createApplication.fulfilled, (state, action) => {
         const companyId = action.meta.arg.companyId;
