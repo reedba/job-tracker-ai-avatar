@@ -1,16 +1,47 @@
 class ApplicationsController < ApplicationController
   include Authenticatable
   before_action :authenticate_request
-  before_action :set_company, only: [:index, :create]
+  before_action :set_company, only: [:create]
   before_action :set_application, only: [:show, :update, :destroy]
 
   def index
-    @applications = @company.applications
-    render json: @applications
+    begin
+      if params[:company_id]
+        # Nested route: /companies/:company_id/applications
+        set_company
+        @applications = @company.applications.includes(:company)
+        Rails.logger.info "Fetching applications for company #{@company.id}"
+      else
+        # Top-level route: /applications
+        user_companies = current_user.companies.pluck(:id)
+        Rails.logger.info "User companies: #{user_companies}"
+        
+        @applications = Application
+          .includes(:company)
+          .where(company_id: user_companies)
+        Rails.logger.info "Fetching all applications for user #{current_user.id}"
+      end
+      
+      applications_data = @applications.to_a
+      Rails.logger.info "Found #{applications_data.length} applications"
+      
+      render json: { 
+        applications: applications_data,
+        message: "Successfully fetched applications"
+      }
+    rescue StandardError => e
+      Rails.logger.error "Error in applications#index: #{e.message}"
+      Rails.logger.error e.backtrace.join("\n")
+      render json: { 
+        error: "Failed to fetch applications: #{e.message}",
+        details: e.backtrace.first(5),
+        status: 500
+      }, status: :internal_server_error
+    end
   end
 
   def show
-    render json: @application
+    render json: @application, serializer: ApplicationSerializer
   end
 
   def create

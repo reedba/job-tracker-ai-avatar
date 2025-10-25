@@ -1,6 +1,20 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import api from '../../services/api';
 
+export const fetchApplications = createAsyncThunk(
+  'applications/fetchApplications',
+  async () => {
+    try {
+      const response = await api.get('/applications');
+      console.log('Applications response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching applications:', error);
+      throw error;
+    }
+  }
+);
+
 export const createApplication = createAsyncThunk(
   'applications/createApplication',
   async ({ companyId, applicationData }, { dispatch, rejectWithValue, getState }) => {
@@ -50,40 +64,62 @@ export const createApplication = createAsyncThunk(
   }
 );
 
-export const fetchApplications = createAsyncThunk(
-  'applications/fetchApplications',
-  async (companyId, { rejectWithValue }) => {
-    try {
-      const response = await api.get(`/companies/${companyId}/applications`);
-      return { companyId, applications: response.data };
-    } catch (error) {
-      return rejectWithValue(error.response?.data || 'Failed to fetch applications');
-    }
-  }
-);
-
 const applicationsSlice = createSlice({
   name: 'applications',
   initialState: {
-    byCompany: {}
+    items: [],
+    status: 'idle',
+    error: null
   },
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(fetchApplications.fulfilled, (state, action) => {
-        state.byCompany[action.payload.companyId] = action.payload.applications;
+      // Fetch applications
+      .addCase(fetchApplications.pending, (state) => {
+        console.log('fetchApplications.pending - Setting status to loading');
+        state.status = 'loading';
       })
+      .addCase(fetchApplications.fulfilled, (state, action) => {
+        console.log('fetchApplications.fulfilled - Received data:', action.payload);
+        state.status = 'succeeded';
+        state.items = action.payload?.applications || [];
+        state.error = null;
+      })
+      .addCase(fetchApplications.rejected, (state, action) => {
+        console.log('fetchApplications.rejected - Error:', action.error);
+        state.status = 'failed';
+        state.error = action.error.message;
+      })
+      // Create application
       .addCase(createApplication.fulfilled, (state, action) => {
-        const companyId = action.meta.arg.companyId;
-        if (!state.byCompany[companyId]) {
-          state.byCompany[companyId] = [];
-        }
-        const application = action.payload.application;
-        if (application) {
-          state.byCompany[companyId].push(application);
-        }
+        state.items.push(action.payload.application);
+      })
+      // Delete application
+      .addCase(deleteApplication.fulfilled, (state, action) => {
+        state.items = state.items.filter(app => app.id !== action.payload);
+        state.error = null;
+      })
+      .addCase(deleteApplication.rejected, (state, action) => {
+        state.error = action.payload || 'Failed to delete application';
       });
   },
 });
+
+export const deleteApplication = createAsyncThunk(
+  'applications/deleteApplication',
+  async (id, { rejectWithValue }) => {
+    try {
+      await api.delete(`/applications/${id}`);
+      return id;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.error || 'Failed to delete application');
+    }
+  }
+);
+
+// Selectors
+export const selectAllApplications = (state) => state.applications?.items || [];
+export const selectApplicationsStatus = (state) => state.applications?.status || 'idle';
+export const selectApplicationsError = (state) => state.applications?.error;
 
 export default applicationsSlice.reducer;

@@ -20,6 +20,9 @@ Rails.application.routes.draw do
         end
       end
     end
+    
+    # Top-level applications route for fetching all applications
+    resources :applications, only: [:index, :show, :update, :destroy]
   end
 
   # Health check endpoint
