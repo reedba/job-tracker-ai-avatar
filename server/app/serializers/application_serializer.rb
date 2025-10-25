@@ -12,7 +12,7 @@ class ApplicationSerializer < ActiveModel::Serializer
 
   # Format the date_submitted for consistent handling
   def date_submitted
-    object.date_submitted.iso8601 if object.date_submitted
+    object.date_submitted&.in_time_zone('Eastern Time (US & Canada)')&.iso8601
   end
 
   # Format employment_type for display

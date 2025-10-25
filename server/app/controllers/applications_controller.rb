@@ -10,32 +10,39 @@ class ApplicationsController < ApplicationController
         # Nested route: /companies/:company_id/applications
         set_company
         @applications = @company.applications.includes(:company)
-        Rails.logger.info "Fetching applications for company #{@company.id}"
       else
         # Top-level route: /applications
         user_companies = current_user.companies.pluck(:id)
-        Rails.logger.info "User companies: #{user_companies}"
-        
         @applications = Application
           .includes(:company)
           .where(company_id: user_companies)
-        Rails.logger.info "Fetching all applications for user #{current_user.id}"
       end
-      
-      applications_data = @applications.to_a
-      Rails.logger.info "Found #{applications_data.length} applications"
-      
-      render json: { 
-        applications: applications_data,
-        message: "Successfully fetched applications"
-      }
+
+      applications_data = @applications.map do |app|
+        {
+          id: app.id,
+          title: app.title,
+          employment_type: app.employment_type&.titleize,
+          work_mode: app.work_mode&.titleize,
+          date_submitted: app.date_submitted&.in_time_zone('Eastern Time (US & Canada)')&.iso8601,
+          job_level: app.job_level,
+          job_posting_url: app.job_posting_url,
+          job_external_id: app.job_external_id,
+          company: {
+            id: app.company.id,
+            name: app.company.name,
+            webpage: app.company.webpage
+          }
+        }
+      end
+
+      render json: { applications: applications_data }
     rescue StandardError => e
       Rails.logger.error "Error in applications#index: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
       render json: { 
         error: "Failed to fetch applications: #{e.message}",
-        details: e.backtrace.first(5),
-        status: 500
+        details: e.backtrace.first(5)
       }, status: :internal_server_error
     end
   end

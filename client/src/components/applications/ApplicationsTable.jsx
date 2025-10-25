@@ -80,10 +80,11 @@ const ApplicationsTable = () => {
                 <TableCell>{application.work_mode || 'N/A'}</TableCell>
                 <TableCell>
                   {application.date_submitted
-                    ? new Date(application.date_submitted).toLocaleDateString('en-US', {
+                    ? new Date(application.date_submitted).toLocaleString('en-US', {
                         year: 'numeric',
                         month: 'short',
                         day: '2-digit',
+                        timeZone: 'America/New_York'  // Use Eastern Time
                       })
                     : 'N/A'}
                 </TableCell>
