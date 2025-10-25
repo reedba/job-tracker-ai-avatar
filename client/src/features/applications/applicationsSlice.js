@@ -107,12 +107,24 @@ const applicationsSlice = createSlice({
 
 export const deleteApplication = createAsyncThunk(
   'applications/deleteApplication',
-  async (id, { rejectWithValue }) => {
+  async (id, { dispatch, rejectWithValue }) => {
     try {
-      await api.delete(`/applications/${id}`);
+      const response = await api.delete(`/applications/${id}`);
+      // Update companies state with the returned company data
+      if (response.data?.company) {
+        dispatch({
+          type: 'companies/updateCompany',
+          payload: response.data.company
+        });
+      }
       return id;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.error || 'Failed to delete application');
+      console.error('Delete application error:', error);
+      return rejectWithValue(
+        error.response?.data?.error || 
+        error.response?.data?.message || 
+        'Failed to delete application'
+      );
     }
   }
 );

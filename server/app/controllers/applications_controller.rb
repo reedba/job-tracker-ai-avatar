@@ -79,8 +79,25 @@ class ApplicationsController < ApplicationController
   end
 
   def destroy
-    @application.destroy
-    head :no_content
+    company = @application.company
+    if @application.destroy
+      # Return updated company data for UI updates
+      render json: {
+        message: 'Application successfully deleted',
+        company: CompanySerializer.new(company.reload)
+      }
+    else
+      render json: {
+        error: 'Failed to delete application',
+        errors: @application.errors.full_messages
+      }, status: :unprocessable_entity
+    end
+  rescue => e
+    Rails.logger.error "Error deleting application: #{e.message}"
+    render json: {
+      error: 'Failed to delete application',
+      message: e.message
+    }, status: :internal_server_error
   end
 
   private

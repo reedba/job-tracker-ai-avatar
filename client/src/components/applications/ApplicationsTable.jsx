@@ -92,9 +92,16 @@ const ApplicationsTable = () => {
                   <IconButton
                     color="error"
                     size="small"
-                    onClick={() => {
+                    onClick={async () => {
                       if (window.confirm('Are you sure you want to delete this application?')) {
-                        dispatch(deleteApplication(application.id));
+                        try {
+                          await dispatch(deleteApplication(application.id)).unwrap();
+                          // Optional: Show success message
+                        } catch (err) {
+                          // Show error message to user
+                          console.error('Failed to delete application:', err);
+                          window.alert('Failed to delete application: ' + (err.message || 'Unknown error'));
+                        }
                       }
                     }}
                   >
