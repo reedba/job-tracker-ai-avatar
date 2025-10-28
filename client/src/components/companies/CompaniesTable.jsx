@@ -23,6 +23,8 @@ import { Star, StarBorder, FilterList } from '@mui/icons-material';
 import { fetchCompanies, updateCompany, optimisticUpdateCompany } from '../../features/companies/companiesSlice';
 import AddApplicationModal from '../applications/AddApplicationModal';
 import AddCompanyModal from './AddCompanyModal';
+import EditCompanyModal from './EditCompanyModal';
+import DeleteCompanyModal from './DeleteCompanyModal';
 import TableFilters from './TableFilters';
 
 const countBadgeStyle = {
@@ -43,6 +45,8 @@ const CompaniesTable = () => {
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   const [isAddCompanyModalOpen, setIsAddCompanyModalOpen] = useState(false);
+  const [isEditCompanyModalOpen, setIsEditCompanyModalOpen] = useState(false);
+  const [isDeleteCompanyModalOpen, setIsDeleteCompanyModalOpen] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
     applicationStatus: {
@@ -97,6 +101,26 @@ const CompaniesTable = () => {
   const handleCloseApplicationModal = () => {
     setSelectedCompany(null);
     setIsApplicationModalOpen(false);
+  };
+
+  const handleOpenEditModal = (company) => {
+    setSelectedCompany(company);
+    setIsEditCompanyModalOpen(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setSelectedCompany(null);
+    setIsEditCompanyModalOpen(false);
+  };
+
+  const handleOpenDeleteModal = (company) => {
+    setSelectedCompany(company);
+    setIsDeleteCompanyModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setSelectedCompany(null);
+    setIsDeleteCompanyModalOpen(false);
   };
 
   const handleOpenAddCompanyModal = () => {
@@ -324,13 +348,30 @@ const CompaniesTable = () => {
                   )}
                 </TableCell>
                 <TableCell align="center">
-                  <Button
-                    variant="contained"
-                    size="small"
-                    onClick={() => handleOpenApplicationModal(company)}
-                  >
-                    Add Application
-                  </Button>
+                  <Stack direction="row" spacing={1} justifyContent="center">
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => handleOpenApplicationModal(company)}
+                    >
+                      Add Application
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => handleOpenEditModal(company)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="error"
+                      onClick={() => handleOpenDeleteModal(company)}
+                    >
+                      Delete
+                    </Button>
+                  </Stack>
                 </TableCell>
               </TableRow>
             ))}
@@ -340,12 +381,24 @@ const CompaniesTable = () => {
 
       {/* Modals */}
       {selectedCompany && (
-        <AddApplicationModal
-          open={isApplicationModalOpen}
-          onClose={handleCloseApplicationModal}
-          companyId={selectedCompany.id}
-          companyName={selectedCompany.name}
-        />
+        <>
+          <AddApplicationModal
+            open={isApplicationModalOpen}
+            onClose={handleCloseApplicationModal}
+            companyId={selectedCompany.id}
+            companyName={selectedCompany.name}
+          />
+          <EditCompanyModal
+            open={isEditCompanyModalOpen}
+            onClose={handleCloseEditModal}
+            company={selectedCompany}
+          />
+          <DeleteCompanyModal
+            open={isDeleteCompanyModalOpen}
+            onClose={handleCloseDeleteModal}
+            company={selectedCompany}
+          />
+        </>
       )}
       <AddCompanyModal
         open={isAddCompanyModalOpen}

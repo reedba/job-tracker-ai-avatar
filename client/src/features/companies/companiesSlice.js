@@ -80,18 +80,38 @@ export const createCompany = createAsyncThunk(
 
 export const updateCompany = createAsyncThunk(
   'companies/updateCompany',
-  async ({ id, updates }) => {
-    // Transform the updates to match what the Rails API expects
-    const apiUpdates = {};
-    if (updates.favorited !== undefined) {
-      apiUpdates.favorited = updates.favorited;
+  async ({ id, updates }, { rejectWithValue }) => {
+    try {
+      console.log('Updating company:', id, 'with data:', updates);
+      const response = await api.patch(`/companies/${id}`, { company: updates });
+      console.log('Server response:', response.data);
+      return response.data.company;
+    } catch (error) {
+      console.error('Error updating company:', error);
+      const errorMessage = error.response?.data?.errors?.[0] || 
+                         error.response?.data?.error || 
+                         error.message || 
+                         'Failed to update company';
+      return rejectWithValue(errorMessage);
     }
-    if (updates.webpage !== undefined) {
-      apiUpdates.webpage = updates.webpage;
+  }
+);
+
+export const deleteCompany = createAsyncThunk(
+  'companies/deleteCompany',
+  async (id, { rejectWithValue }) => {
+    try {
+      console.log('Deleting company:', id);
+      await api.delete(`/companies/${id}`);
+      return id;
+    } catch (error) {
+      console.error('Error deleting company:', error);
+      const errorMessage = error.response?.data?.errors?.[0] || 
+                         error.response?.data?.error || 
+                         error.message || 
+                         'Failed to delete company';
+      return rejectWithValue(errorMessage);
     }
-    // Add other fields as needed
-    const response = await api.patch(`/companies/${id}`, { company: apiUpdates });
-    return response.data;
   }
 );
 
@@ -180,6 +200,17 @@ const companiesSlice = createSlice({
         // Remove any optimistic entries on error
         state.items = state.items.filter(item => item.id.toString().indexOf('temp-') === -1);
         state.error = action.payload?.error || 'Failed to create company';
+      })
+      // Delete company
+      .addCase(deleteCompany.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(deleteCompany.fulfilled, (state, action) => {
+        state.items = state.items.filter(company => company.id !== action.payload);
+        state.error = null;
+      })
+      .addCase(deleteCompany.rejected, (state, action) => {
+        state.error = action.payload || 'Failed to delete company';
       });
   }
 });

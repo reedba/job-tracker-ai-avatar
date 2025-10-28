@@ -172,9 +172,23 @@ const Register = () => {
       return;
     }
 
-    const result = await dispatch(register(formData));
-    if (!result.error) {
-      navigate('/dashboard');
+    try {
+      const result = await dispatch(register(formData));
+      if (result.error) {
+        // Handle the error from the backend
+        const errorMessage = result.payload || 'Registration failed';
+        setValidationErrors(prev => ({
+          ...prev,
+          backend: Array.isArray(errorMessage) ? errorMessage.join(', ') : errorMessage
+        }));
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      setValidationErrors(prev => ({
+        ...prev,
+        backend: 'An unexpected error occurred. Please try again.'
+      }));
     }
   };
 
@@ -191,9 +205,9 @@ const Register = () => {
             </Typography>
           </div>
 
-          {error && (
+          {(error || validationErrors.backend) && (
             <Alert severity="error" className="error-alert">
-              {error}
+              {error || validationErrors.backend}
             </Alert>
           )}
 

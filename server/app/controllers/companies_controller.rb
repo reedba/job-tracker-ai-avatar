@@ -53,8 +53,21 @@ class CompaniesController < ApplicationController
   end
 
   def destroy
-    @company.destroy
-    head :no_content
+    Rails.logger.info "==== Deleting Company ===="
+    Rails.logger.info "Company to delete: #{@company.inspect}"
+    
+    begin
+      if @company.destroy
+        Rails.logger.info "Successfully deleted company ID: #{@company.id}"
+        head :no_content
+      else
+        Rails.logger.error "Failed to delete company: #{@company.errors.full_messages}"
+        render json: { errors: @company.errors.full_messages }, status: :unprocessable_entity
+      end
+    rescue => e
+      Rails.logger.error "Error deleting company: #{e.message}\n#{e.backtrace.join("\n")}"
+      render json: { error: "Failed to delete company: #{e.message}" }, status: :internal_server_error
+    end
   end
 
   private
