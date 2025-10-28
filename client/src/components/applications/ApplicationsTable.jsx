@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Table,
@@ -13,21 +13,30 @@ import {
   CircularProgress,
   IconButton,
 } from '@mui/material';
-import { Delete as DeleteIcon } from '@mui/icons-material';
+import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import {
   fetchApplications,
   selectAllApplications,
   selectApplicationsStatus,
   selectApplicationsError,
+  deleteApplication,
 } from '../../features/applications/applicationsSlice';
+import EditApplicationModal from './EditApplicationModal';
 
 const ApplicationsTable = () => {
   const dispatch = useDispatch();
   const applications = useSelector(selectAllApplications);
   const status = useSelector(selectApplicationsStatus);
   const error = useSelector(selectApplicationsError);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  console.log('ApplicationsTable - Current state:', { applications, status, error });
+  console.log('ApplicationsTable - Current state:', { 
+    applications, 
+    status, 
+    error,
+    firstApp: applications[0]
+  });
 
   useEffect(() => {
     if (status === 'idle') {
@@ -52,68 +61,92 @@ const ApplicationsTable = () => {
   }
 
   return (
-    <TableContainer component={Paper}>
-      <Table>
-        <TableHead>
-          <TableRow>
-            <TableCell>Company</TableCell>
-            <TableCell>Position</TableCell>
-            <TableCell>Employment Type</TableCell>
-            <TableCell>Work Mode</TableCell>
-            <TableCell>Date Applied</TableCell>
-            <TableCell align="center">Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {applications.length === 0 ? (
+    <>
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
             <TableRow>
-              <TableCell colSpan={6} align="center">
-                <Typography>No applications found</Typography>
-              </TableCell>
+              <TableCell>Company</TableCell>
+              <TableCell>Position</TableCell>
+              <TableCell>Employment Type</TableCell>
+              <TableCell>Work Mode</TableCell>
+              <TableCell>Date Applied</TableCell>
+              <TableCell align="center">Actions</TableCell>
             </TableRow>
-          ) : (
-            applications.map((application) => (
-              <TableRow key={application.id}>
-                <TableCell>{application.company?.name || 'N/A'}</TableCell>
-                <TableCell>{application.title}</TableCell>
-                <TableCell>{application.employment_type || 'N/A'}</TableCell>
-                <TableCell>{application.work_mode || 'N/A'}</TableCell>
-                <TableCell>
-                  {application.date_submitted
-                    ? new Date(application.date_submitted).toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: '2-digit',
-                        timeZone: 'America/New_York'  // Use Eastern Time
-                      })
-                    : 'N/A'}
-                </TableCell>
-                <TableCell align="center">
-                  <IconButton
-                    color="error"
-                    size="small"
-                    onClick={async () => {
-                      if (window.confirm('Are you sure you want to delete this application?')) {
-                        try {
-                          await dispatch(deleteApplication(application.id)).unwrap();
-                          // Optional: Show success message
-                        } catch (err) {
-                          // Show error message to user
-                          console.error('Failed to delete application:', err);
-                          window.alert('Failed to delete application: ' + (err.message || 'Unknown error'));
-                        }
-                      }
-                    }}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
+          </TableHead>
+          <TableBody>
+            {applications.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} align="center">
+                  <Typography>No applications found</Typography>
                 </TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
+            ) : (
+              applications.map((application) => (
+                <TableRow key={application.id}>
+                  <TableCell>{application.company?.name || 'N/A'}</TableCell>
+                  <TableCell>{application.title}</TableCell>
+                  <TableCell>{application.employment_type || 'N/A'}</TableCell>
+                  <TableCell>{application.work_mode || 'N/A'}</TableCell>
+                  <TableCell>
+                    {application.date_submitted
+                      ? new Date(application.date_submitted).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: '2-digit',
+                          timeZone: 'America/New_York'  // Use Eastern Time
+                        })
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                      <IconButton
+                        color="primary"
+                        size="small"
+                        onClick={() => {
+                          setSelectedApplication(application);
+                          setIsEditModalOpen(true);
+                        }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton
+                        color="error"
+                        size="small"
+                        onClick={async () => {
+                          if (window.confirm('Are you sure you want to delete this application?')) {
+                            try {
+                              await dispatch(deleteApplication(application.id)).unwrap();
+                            } catch (err) {
+                              console.error('Failed to delete application:', err);
+                              window.alert('Failed to delete application: ' + (err.message || 'Unknown error'));
+                            }
+                          }
+                        }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {selectedApplication && (
+        <EditApplicationModal
+          open={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedApplication(null);
+          }}
+          application={selectedApplication}
+          companyName={selectedApplication.company?.name || 'Unknown Company'}
+        />
+      )}
+    </>
   );
 };
 

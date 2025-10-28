@@ -15,6 +15,23 @@ export const fetchApplications = createAsyncThunk(
   }
 );
 
+export const updateApplication = createAsyncThunk(
+  'applications/updateApplication',
+  async ({ companyId, applicationId, applicationData }, { rejectWithValue }) => {
+    try {
+      const response = await api.patch(`/companies/${companyId}/applications/${applicationId}`, {
+        application: applicationData
+      });
+      return { ...response.data, companyId };
+    } catch (error) {
+      const errorMessage = error.response?.data?.errors || 
+                         error.response?.data?.error || 
+                         'Failed to update application';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
 export const createApplication = createAsyncThunk(
   'applications/createApplication',
   async ({ companyId, applicationData }, { dispatch, rejectWithValue, getState }) => {
@@ -80,7 +97,11 @@ const applicationsSlice = createSlice({
         state.status = 'loading';
       })
       .addCase(fetchApplications.fulfilled, (state, action) => {
-        console.log('fetchApplications.fulfilled - Received data:', action.payload);
+        console.log('fetchApplications.fulfilled - Received data:', {
+          payload: action.payload,
+          applications: action.payload?.applications,
+          firstApp: action.payload?.applications?.[0]
+        });
         state.status = 'succeeded';
         state.items = action.payload?.applications || [];
         state.error = null;
@@ -93,6 +114,20 @@ const applicationsSlice = createSlice({
       // Create application
       .addCase(createApplication.fulfilled, (state, action) => {
         state.items.push(action.payload.application);
+      })
+      // Update application
+      .addCase(updateApplication.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(updateApplication.fulfilled, (state, action) => {
+        const index = state.items.findIndex(app => app.id === action.payload.application.id);
+        if (index !== -1) {
+          state.items[index] = action.payload.application;
+        }
+        state.error = null;
+      })
+      .addCase(updateApplication.rejected, (state, action) => {
+        state.error = action.payload || 'Failed to update application';
       })
       // Delete application
       .addCase(deleteApplication.fulfilled, (state, action) => {

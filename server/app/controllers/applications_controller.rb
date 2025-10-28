@@ -71,10 +71,30 @@ class ApplicationsController < ApplicationController
   end
 
   def update
-    if @application.update(application_params)
-      render json: @application
-    else
-      render json: { errors: @application.errors.full_messages }, status: :unprocessable_entity
+    Rails.logger.info "==== Updating Application ===="
+    Rails.logger.info "Application ID: #{@application.id}"
+    Rails.logger.info "Company ID: #{@application.company_id}"
+    Rails.logger.info "Update params: #{application_params.inspect}"
+    
+    begin
+      if @application.update(application_params)
+        # Return both updated application and company data
+        render json: {
+          application: @application,
+          company: CompanySerializer.new(@application.company.reload)
+        }
+      else
+        Rails.logger.error "Failed to update application: #{@application.errors.full_messages}"
+        render json: { 
+          message: 'Validation failed',
+          errors: @application.errors.full_messages 
+        }, status: :unprocessable_entity
+      end
+    rescue => e
+      Rails.logger.error "Error updating application: #{e.message}\n#{e.backtrace.join("\n")}"
+      render json: {
+        error: "Failed to update application: #{e.message}"
+      }, status: :internal_server_error
     end
   end
 
