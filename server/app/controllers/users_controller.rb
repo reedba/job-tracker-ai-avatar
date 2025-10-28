@@ -99,7 +99,7 @@ class UsersController < ApplicationController
   end
 
   def authorize_admin
-    unless current_user.has_role?('admin')
+    unless current_user.is_admin?
       Rails.logger.warn("Unauthorized admin access attempt by user: #{current_user.email}")
       render json: {
         status: :forbidden,
@@ -109,7 +109,7 @@ class UsersController < ApplicationController
   end
 
   def authorize_user
-    unless current_user.id == @user.id || current_user.has_role?('admin')
+    unless current_user.id == @user.id || current_user.is_admin?
       Rails.logger.warn("Unauthorized modification attempt by user: #{current_user.email}")
       render json: {
         status: :forbidden,
@@ -126,7 +126,7 @@ class UsersController < ApplicationController
       :first_name,
       :last_name,
       :phone_number,
-      roles: []
+      :is_admin
     )
   end
 
@@ -148,7 +148,7 @@ class UsersController < ApplicationController
       last_name: user.last_name,
       full_name: user.full_name,
       phone_number: user.phone_number,
-      roles: user.roles,
+      is_admin: user.is_admin,
       created_at: user.created_at,
       updated_at: user.updated_at
     }
