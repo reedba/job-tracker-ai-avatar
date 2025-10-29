@@ -5,7 +5,7 @@ export const fetchContacts = createAsyncThunk(
   'contacts/fetchContacts',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await api.get('/api/contacts');
+      const response = await api.get('/contacts');
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to fetch contacts');
@@ -17,7 +17,7 @@ export const createContact = createAsyncThunk(
   'contacts/createContact',
   async (contactData, { rejectWithValue }) => {
     try {
-      const response = await api.post('/api/contacts', { contact: contactData });
+      const response = await api.post('/contacts', { contact: contactData });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.errors || 'Failed to create contact');
@@ -29,7 +29,7 @@ export const updateContact = createAsyncThunk(
   'contacts/updateContact',
   async ({ id, contactData }, { rejectWithValue }) => {
     try {
-      const response = await api.patch(`/api/contacts/${id}`, { contact: contactData });
+      const response = await api.patch(`/contacts/${id}`, { contact: contactData });
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.errors || 'Failed to update contact');
@@ -41,7 +41,7 @@ export const deleteContact = createAsyncThunk(
   'contacts/deleteContact',
   async (id, { rejectWithValue }) => {
     try {
-      await api.delete(`/api/contacts/${id}`);
+      await api.delete(`/contacts/${id}`);
       return id;
     } catch (error) {
       return rejectWithValue(error.response?.data?.error || 'Failed to delete contact');
