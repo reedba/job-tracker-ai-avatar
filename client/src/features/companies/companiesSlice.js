@@ -13,12 +13,14 @@ export const fetchCompanies = createAsyncThunk(
         value: response.data,
         keys: Object.keys(response.data),
       });
-      // If the response is an object with a companies key, return the array
-      if (response.data && Array.isArray(response.data)) {
+      
+      // Backend returns {companies: [...]}
+      if (response.data && response.data.companies && Array.isArray(response.data.companies)) {
+        return response.data.companies;
+      }
+      // Fallback: if response.data is directly an array
+      if (Array.isArray(response.data)) {
         return response.data;
-      } else if (response.data && typeof response.data === 'object') {
-        // If it's just an object, wrap it in an array
-        return Array.isArray(response.data.companies) ? response.data.companies : [];
       }
       // Fallback to empty array if data structure is unexpected
       return [];
