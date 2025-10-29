@@ -15,6 +15,7 @@ import CompaniesTable from '../companies/CompaniesTable';
 import ApplicationsTable from '../applications/ApplicationsTable';
 import ContactsTable from '../contacts/ContactsTable';
 import AddCompanyModal from '../companies/AddCompanyModal';
+import ApplicationChart from './ApplicationChart';
 
 const TabPanel = ({ children, value, index, ...other }) => {
   return (
@@ -85,6 +86,9 @@ const Dashboard = () => {
             {getTabTitle()}
           </Typography>
         </Box>
+
+        {/* Application Chart */}
+        <ApplicationChart />
         
         <Paper sx={{ mb: 3 }}>
           <Tabs
