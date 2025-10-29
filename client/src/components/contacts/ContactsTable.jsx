@@ -17,7 +17,6 @@ import {
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import {
   fetchContacts,
-  deleteContact,
   selectAllContacts,
   selectContactsStatus,
   selectContactsError
@@ -25,6 +24,7 @@ import {
 import { fetchCompanies } from '../../features/companies/companiesSlice';
 import AddContactModal from './AddContactModal';
 import EditContactModal from './EditContactModal';
+import DeleteContactModal from './DeleteContactModal';
 
 const ContactsTable = () => {
   const dispatch = useDispatch();
@@ -33,6 +33,7 @@ const ContactsTable = () => {
   const error = useSelector(selectContactsError);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
 
   useEffect(() => {
@@ -42,14 +43,15 @@ const ContactsTable = () => {
     }
   }, [status, dispatch]);
 
-  const handleDelete = async (contactId) => {
-    if (window.confirm('Are you sure you want to delete this contact?')) {
-      try {
-        await dispatch(deleteContact(contactId)).unwrap();
-      } catch (err) {
-        console.error('Failed to delete contact:', err);
-      }
-    }
+  const handleDeleteClick = (contact) => {
+    setSelectedContact(contact);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteModalClose = () => {
+    setIsDeleteModalOpen(false);
+    setSelectedContact(null);
+    dispatch(fetchContacts());
   };
 
   const handleModalClose = () => {
@@ -148,7 +150,7 @@ const ContactsTable = () => {
                       <IconButton
                         size="small"
                         color="error"
-                        onClick={() => handleDelete(contact.id)}
+                        onClick={() => handleDeleteClick(contact)}
                       >
                         <DeleteIcon />
                       </IconButton>
@@ -169,6 +171,12 @@ const ContactsTable = () => {
       <EditContactModal
         open={isEditModalOpen}
         onClose={handleEditModalClose}
+        contact={selectedContact}
+      />
+
+      <DeleteContactModal
+        open={isDeleteModalOpen}
+        onClose={handleDeleteModalClose}
         contact={selectedContact}
       />
     </div>
