@@ -71,13 +71,14 @@ const ApplicationsTable = () => {
               <TableCell>Employment Type</TableCell>
               <TableCell>Work Mode</TableCell>
               <TableCell>Date Applied</TableCell>
+              <TableCell>External ID</TableCell>
               <TableCell align="center">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {applications.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={7} align="center">
                   <Typography>No applications found</Typography>
                 </TableCell>
               </TableRow>
@@ -98,6 +99,7 @@ const ApplicationsTable = () => {
                         })
                       : 'N/A'}
                   </TableCell>
+                  <TableCell>{application.job_external_id || 'N/A'}</TableCell>
                   <TableCell align="center">
                     <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
                       <IconButton

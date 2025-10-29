@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_10_28_193612) do
+ActiveRecord::Schema[8.0].define(version: 2025_10_28_235604) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -44,8 +44,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_28_193612) do
 
   create_table "contacts", force: :cascade do |t|
     t.bigint "company_id", null: false
-    t.string "name"
-    t.string "role"
     t.string "email"
     t.string "phone"
     t.string "linkedin_url"
@@ -53,6 +51,9 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_28_193612) do
     t.date "dates_contacted", default: [], array: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "first_name", null: false
+    t.string "last_name", null: false
+    t.string "title"
     t.index ["company_id"], name: "index_contacts_on_company_id"
     t.index ["dates_contacted"], name: "index_contacts_on_dates_contacted", using: :gin
   end

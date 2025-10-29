@@ -2,6 +2,7 @@ class Company < ApplicationRecord
   # Associations
   belongs_to :user
   has_many :applications, dependent: :destroy
+  has_many :contacts, dependent: :destroy
 
   # Scopes
   scope :with_last_application_date, -> {
