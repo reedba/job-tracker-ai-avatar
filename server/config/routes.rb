@@ -24,6 +24,9 @@ Rails.application.routes.draw do
     # Top-level routes for fetching all resources
     resources :applications, only: [:index, :show, :update, :destroy]
     resources :contacts, only: [:index, :show, :create, :update, :destroy]
+    
+    # Settings management (singular resource - one per user)
+    resource :setting, only: [:show, :update]
   end
 
   # Health check endpoint

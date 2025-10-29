@@ -3,6 +3,7 @@ class User < ApplicationRecord
 
   # Associations
   has_many :companies, dependent: :destroy
+  has_one :setting, dependent: :destroy
 
   # Validations
   validates :email, presence: true, 

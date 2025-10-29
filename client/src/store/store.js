@@ -3,6 +3,7 @@ import authReducer from '../features/auth/authSlice';
 import companiesReducer from '../features/companies/companiesSlice';
 import applicationsReducer from '../features/applications/applicationsSlice';
 import contactsReducer from '../features/contacts/contactsSlice';
+import settingsReducer from '../features/settings/settingsSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,5 +11,6 @@ export const store = configureStore({
     companies: companiesReducer,
     applications: applicationsReducer,
     contacts: contactsReducer,
+    settings: settingsReducer,
   },
 });

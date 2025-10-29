@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_10_28_235604) do
+ActiveRecord::Schema[8.0].define(version: 2025_10_29_162919) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -58,6 +58,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_28_235604) do
     t.index ["dates_contacted"], name: "index_contacts_on_dates_contacted", using: :gin
   end
 
+  create_table "settings", force: :cascade do |t|
+    t.integer "application_monthly_goal"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["user_id"], name: "index_settings_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "email", null: false
     t.string "password_digest", null: false
@@ -75,4 +83,5 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_28_235604) do
   add_foreign_key "applications", "companies"
   add_foreign_key "companies", "users"
   add_foreign_key "contacts", "companies"
+  add_foreign_key "settings", "users"
 end

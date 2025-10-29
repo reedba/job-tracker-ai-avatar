@@ -11,9 +11,10 @@ import {
   Box,
   Avatar
 } from '@mui/material';
-import { Menu as MenuIcon, AccountCircle } from '@mui/icons-material';
+import { Menu as MenuIcon, AccountCircle, Settings as SettingsIcon } from '@mui/icons-material';
 import { useState } from 'react';
 import { logout } from '../../features/auth/authSlice';
+import SettingsModal from '../settings/SettingsModal';
 
 const MainToolbar = () => {
   const dispatch = useDispatch();
@@ -22,6 +23,7 @@ const MainToolbar = () => {
   
   const [anchorEl, setAnchorEl] = useState(null);
   const [mobileMoreAnchorEl, setMobileMoreAnchorEl] = useState(null);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const handleProfileMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -40,6 +42,14 @@ const MainToolbar = () => {
     handleMenuClose();
     dispatch(logout());
     navigate('/login');
+  };
+
+  const handleSettingsClick = () => {
+    setIsSettingsModalOpen(true);
+  };
+
+  const handleSettingsModalClose = () => {
+    setIsSettingsModalOpen(false);
   };
 
   const menuId = 'primary-search-account-menu';
@@ -91,6 +101,15 @@ const MainToolbar = () => {
           
           <IconButton
             size="large"
+            aria-label="settings"
+            onClick={handleSettingsClick}
+            color="inherit"
+          >
+            <SettingsIcon />
+          </IconButton>
+          
+          <IconButton
+            size="large"
             edge="end"
             aria-label="account of current user"
             aria-controls={menuId}
@@ -103,6 +122,11 @@ const MainToolbar = () => {
         </Box>
       </Toolbar>
       {renderMenu}
+      
+      <SettingsModal
+        open={isSettingsModalOpen}
+        onClose={handleSettingsModalClose}
+      />
     </AppBar>
   );
 };
