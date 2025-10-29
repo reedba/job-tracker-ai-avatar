@@ -5,8 +5,11 @@ import {
   Box, 
   Tabs, 
   Tab,
-  Paper
+  Paper,
+  TextField,
+  InputAdornment
 } from '@mui/material';
+import { Search as SearchIcon } from '@mui/icons-material';
 import Layout from '../layout/Layout';
 import CompaniesTable from '../companies/CompaniesTable';
 import ApplicationsTable from '../applications/ApplicationsTable';
@@ -32,9 +35,16 @@ const TabPanel = ({ children, value, index, ...other }) => {
 const Dashboard = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
+    // Clear search when switching tabs
+    setSearchValue('');
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchValue(event.target.value);
   };
 
   const handleCloseAddModal = () => {
@@ -51,6 +61,19 @@ const Dashboard = () => {
         return 'Contacts';
       default:
         return '';
+    }
+  };
+
+  const getSearchPlaceholder = () => {
+    switch(currentTab) {
+      case 0:
+        return 'Search companies...';
+      case 1:
+        return 'Search applications...';
+      case 2:
+        return 'Search contacts...';
+      default:
+        return 'Search...';
     }
   };
 
@@ -77,14 +100,32 @@ const Dashboard = () => {
           </Tabs>
         </Paper>
 
+        <Box sx={{ mb: 3 }}>
+          <TextField
+            placeholder={getSearchPlaceholder()}
+            value={searchValue}
+            onChange={handleSearchChange}
+            size="small"
+            fullWidth
+            sx={{ maxWidth: 400 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
+
         <TabPanel value={currentTab} index={0}>
-          <CompaniesTable />
+          <CompaniesTable searchFilter={searchValue} />
         </TabPanel>
         <TabPanel value={currentTab} index={1}>
-          <ApplicationsTable />
+          <ApplicationsTable searchFilter={searchValue} />
         </TabPanel>
         <TabPanel value={currentTab} index={2}>
-          <ContactsTable />
+          <ContactsTable searchFilter={searchValue} />
         </TabPanel>
 
         <AddCompanyModal

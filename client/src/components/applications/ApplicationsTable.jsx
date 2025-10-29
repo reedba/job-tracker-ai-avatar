@@ -23,7 +23,7 @@ import {
 } from '../../features/applications/applicationsSlice';
 import EditApplicationModal from './EditApplicationModal';
 
-const ApplicationsTable = () => {
+const ApplicationsTable = ({ searchFilter = '' }) => {
   const dispatch = useDispatch();
   const applications = useSelector(selectAllApplications);
   const status = useSelector(selectApplicationsStatus);
@@ -60,6 +60,17 @@ const ApplicationsTable = () => {
     );
   }
 
+  // Filter applications based on search
+  const filteredApplications = applications.filter(application => {
+    if (!searchFilter) return true;
+    
+    const searchLower = searchFilter.toLowerCase();
+    const company = application.company?.name?.toLowerCase() || '';
+    const title = application.title?.toLowerCase() || '';
+    
+    return company.includes(searchLower) || title.includes(searchLower);
+  });
+
   return (
     <>
       <TableContainer component={Paper}>
@@ -76,14 +87,14 @@ const ApplicationsTable = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {applications.length === 0 ? (
+            {filteredApplications.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} align="center">
                   <Typography>No applications found</Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              applications.map((application) => (
+              filteredApplications.map((application) => (
                 <TableRow key={application.id}>
                   <TableCell>{application.company?.name || 'N/A'}</TableCell>
                   <TableCell>{application.title}</TableCell>

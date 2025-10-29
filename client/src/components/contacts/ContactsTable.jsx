@@ -26,7 +26,7 @@ import AddContactModal from './AddContactModal';
 import EditContactModal from './EditContactModal';
 import DeleteContactModal from './DeleteContactModal';
 
-const ContactsTable = () => {
+const ContactsTable = ({ searchFilter = '' }) => {
   const dispatch = useDispatch();
   const contacts = useSelector(selectAllContacts);
   const status = useSelector(selectContactsStatus);
@@ -86,6 +86,20 @@ const ContactsTable = () => {
     );
   }
 
+  // Filter contacts based on search
+  const filteredContacts = contacts.filter(contact => {
+    if (!searchFilter) return true;
+    
+    const searchLower = searchFilter.toLowerCase();
+    const fullName = `${contact.first_name} ${contact.last_name}`.toLowerCase();
+    const company = contact.company?.name?.toLowerCase() || '';
+    const email = contact.email?.toLowerCase() || '';
+    
+    return fullName.includes(searchLower) || 
+           company.includes(searchLower) || 
+           email.includes(searchLower);
+  });
+
   return (
     <div>
       <Box mb={2} display="flex" justifyContent="flex-end">
@@ -113,14 +127,14 @@ const ContactsTable = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {!contacts || contacts.length === 0 ? (
+            {!filteredContacts || filteredContacts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} align="center">
                   <Typography>No contacts found</Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              contacts.map((contact) => (
+              filteredContacts.map((contact) => (
                 <TableRow key={contact.id}>
                   <TableCell>
                     {contact.first_name} {contact.last_name}

@@ -25,7 +25,6 @@ import AddApplicationModal from '../applications/AddApplicationModal';
 import AddCompanyModal from './AddCompanyModal';
 import EditCompanyModal from './EditCompanyModal';
 import DeleteCompanyModal from './DeleteCompanyModal';
-import TableFilters from './TableFilters';
 
 const countBadgeStyle = {
   display: 'inline-block',
@@ -36,7 +35,7 @@ const countBadgeStyle = {
   color: 'primary.contrastText'
 };
 
-const CompaniesTable = () => {
+const CompaniesTable = ({ searchFilter = '' }) => {
   const dispatch = useDispatch();
   const companiesState = useSelector((state) => state.companies);
   const { items: companies, status, error } = companiesState;
@@ -48,7 +47,6 @@ const CompaniesTable = () => {
   const [isEditCompanyModalOpen, setIsEditCompanyModalOpen] = useState(false);
   const [isDeleteCompanyModalOpen, setIsDeleteCompanyModalOpen] = useState(false);
   const [filters, setFilters] = useState({
-    search: '',
     applicationStatus: {
       hasApplications: true,
       noApplications: true
@@ -149,7 +147,8 @@ const CompaniesTable = () => {
 
   const safeCompanies = Array.isArray(companies) ? companies : [];
   const filteredCompanies = safeCompanies.filter(company => {
-    if (filters.search && !company.name.toLowerCase().includes(filters.search.toLowerCase())) {
+    // Use searchFilter prop from Dashboard
+    if (searchFilter && !company.name.toLowerCase().includes(searchFilter.toLowerCase())) {
       return false;
     }
 
@@ -165,20 +164,14 @@ const CompaniesTable = () => {
 
   return (
     <Box>
-      {/* Header section with search and add button */}
+      {/* Header section with add button */}
       <Box sx={{ 
         display: 'flex', 
-        justifyContent: 'space-between', 
+        justifyContent: 'flex-end', 
         alignItems: 'center', 
         mb: 3,
         gap: 2
       }}>
-        <Box sx={{ flexGrow: 1 }}>
-          <TableFilters 
-            searchValue={filters.search}
-            onSearchChange={(value) => setFilters(prev => ({ ...prev, search: value }))}
-          />
-        </Box>
         <Button
           variant="contained"
           color="primary"
