@@ -81,11 +81,6 @@ const Dashboard = () => {
   return (
     <Layout>
       <Container maxWidth="lg">
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h4" gutterBottom>
-            {getTabTitle()}
-          </Typography>
-        </Box>
 
         {/* Application Chart */}
         <ApplicationChart />
