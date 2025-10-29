@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   TextField,
@@ -9,24 +9,43 @@ import {
 } from '@mui/material';
 import ReusableModal from '../common/ReusableModal';
 import { selectAllCompanies } from '../../features/companies/companiesSlice';
-import { createContact } from '../../features/contacts/contactsSlice';
+import { updateContact } from '../../features/contacts/contactsSlice';
 
-const initialFormState = {
-  first_name: '',
-  last_name: '',
-  email: '',
-  phone: '',
-  title: '',
-  linkedin_url: '',
-  company_id: null
-};
-
-const AddContactModal = ({ open, onClose }) => {
+const EditContactModal = ({ open, onClose, contact }) => {
   const dispatch = useDispatch();
   const companies = useSelector(selectAllCompanies);
-  const [formData, setFormData] = useState(initialFormState);
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    title: '',
+    linkedin_url: '',
+    company_id: null
+  });
   const [error, setError] = useState('');
   const [selectedCompany, setSelectedCompany] = useState(null);
+
+  // Populate form when contact prop changes
+  useEffect(() => {
+    if (contact) {
+      setFormData({
+        first_name: contact.first_name || '',
+        last_name: contact.last_name || '',
+        email: contact.email || '',
+        phone: contact.phone || '',
+        title: contact.title || '',
+        linkedin_url: contact.linkedin_url || '',
+        company_id: contact.company?.id || null
+      });
+      
+      // Find and set the selected company
+      if (contact.company?.id) {
+        const company = companies.find(c => c.id === contact.company.id);
+        setSelectedCompany(company || null);
+      }
+    }
+  }, [contact, companies]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -51,14 +70,14 @@ const AddContactModal = ({ open, onClose }) => {
         return;
       }
 
-      await dispatch(createContact(formData)).unwrap();
+      await dispatch(updateContact({
+        id: contact.id,
+        contactData: formData
+      })).unwrap();
       
-      // Reset form and close modal
-      setFormData(initialFormState);
-      setSelectedCompany(null);
       onClose();
     } catch (err) {
-      setError(typeof err === 'string' ? err : 'Failed to create contact');
+      setError(typeof err === 'string' ? err : 'Failed to update contact');
     }
   };
 
@@ -68,7 +87,7 @@ const AddContactModal = ({ open, onClose }) => {
         Cancel
       </Button>
       <Button onClick={handleSubmit} variant="contained" color="primary">
-        Add Contact
+        Update Contact
       </Button>
     </>
   );
@@ -77,7 +96,7 @@ const AddContactModal = ({ open, onClose }) => {
     <ReusableModal
       open={open}
       onClose={onClose}
-      title="Add New Contact"
+      title="Edit Contact"
       actions={modalActions}
     >
       <Box component="form" noValidate sx={{ mt: 1 }}>
@@ -174,4 +193,4 @@ const AddContactModal = ({ open, onClose }) => {
   );
 };
 
-export default AddContactModal;
+export default EditContactModal;

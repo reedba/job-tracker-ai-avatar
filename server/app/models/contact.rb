@@ -1,6 +1,8 @@
 class Contact < ApplicationRecord
   belongs_to :company
-  validates :name, presence: true
+  
+  validates :first_name, presence: true
+  validates :last_name, presence: true
   validates :email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
-  validates :linkedin_url, format: { with: URI::DEFAULT_PARSER.make_regexp }, allow_blank: true
+  validates :company_id, presence: true
 end

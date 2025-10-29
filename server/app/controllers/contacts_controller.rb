@@ -22,6 +22,7 @@ class ContactsController < ApplicationController
         email: contact.email,
         phone: contact.phone,
         title: contact.title,
+        linkedin_url: contact.linkedin_url,
         company: {
           id: contact.company.id,
           name: contact.company.name
@@ -55,6 +56,7 @@ class ContactsController < ApplicationController
           email: @contact.email,
           phone: @contact.phone,
           title: @contact.title,
+          linkedin_url: @contact.linkedin_url,
           company: {
             id: company.id,
             name: company.name
@@ -62,13 +64,28 @@ class ContactsController < ApplicationController
         }
       }, status: :created
     else
+      Rails.logger.error("Contact validation failed: #{@contact.errors.full_messages}")
       render json: { errors: @contact.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
   def update
     if @contact.update(contact_params)
-      render json: @contact
+      render json: {
+        contact: {
+          id: @contact.id,
+          first_name: @contact.first_name,
+          last_name: @contact.last_name,
+          email: @contact.email,
+          phone: @contact.phone,
+          title: @contact.title,
+          linkedin_url: @contact.linkedin_url,
+          company: {
+            id: @contact.company.id,
+            name: @contact.company.name
+          }
+        }
+      }
     else
       render json: { errors: @contact.errors.full_messages }, status: :unprocessable_entity
     end

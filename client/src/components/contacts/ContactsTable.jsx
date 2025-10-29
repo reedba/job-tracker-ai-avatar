@@ -24,6 +24,7 @@ import {
 } from '../../features/contacts/contactsSlice';
 import { fetchCompanies } from '../../features/companies/companiesSlice';
 import AddContactModal from './AddContactModal';
+import EditContactModal from './EditContactModal';
 
 const ContactsTable = () => {
   const dispatch = useDispatch();
@@ -31,6 +32,8 @@ const ContactsTable = () => {
   const status = useSelector(selectContactsStatus);
   const error = useSelector(selectContactsError);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState(null);
 
   useEffect(() => {
     if (status === 'idle') {
@@ -51,6 +54,17 @@ const ContactsTable = () => {
 
   const handleModalClose = () => {
     setIsAddModalOpen(false);
+    dispatch(fetchContacts());
+  };
+
+  const handleEditClick = (contact) => {
+    setSelectedContact(contact);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditModalClose = () => {
+    setIsEditModalOpen(false);
+    setSelectedContact(null);
     dispatch(fetchContacts());
   };
 
@@ -92,13 +106,14 @@ const ContactsTable = () => {
               <TableCell>Title</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Phone</TableCell>
+              <TableCell>LinkedIn</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {!contacts || contacts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
+                <TableCell colSpan={7} align="center">
                   <Typography>No contacts found</Typography>
                 </TableCell>
               </TableRow>
@@ -113,13 +128,20 @@ const ContactsTable = () => {
                   <TableCell>{contact.email}</TableCell>
                   <TableCell>{contact.phone || 'N/A'}</TableCell>
                   <TableCell>
+                    {contact.linkedin_url ? (
+                      <a href={contact.linkedin_url} target="_blank" rel="noopener noreferrer">
+                        View Profile
+                      </a>
+                    ) : (
+                      'N/A'
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Box display="flex" gap={1}>
                       <IconButton
                         size="small"
                         color="primary"
-                        onClick={() => {
-                          // TODO: Implement edit functionality
-                        }}
+                        onClick={() => handleEditClick(contact)}
                       >
                         <EditIcon />
                       </IconButton>
@@ -142,6 +164,12 @@ const ContactsTable = () => {
       <AddContactModal
         open={isAddModalOpen}
         onClose={handleModalClose}
+      />
+
+      <EditContactModal
+        open={isEditModalOpen}
+        onClose={handleEditModalClose}
+        contact={selectedContact}
       />
     </div>
   );
