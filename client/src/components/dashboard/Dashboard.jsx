@@ -80,24 +80,24 @@ const Dashboard = () => {
 
   return (
     <Layout>
-      <Container maxWidth="lg">
-
-        {/* Application Chart */}
-        <ApplicationChart />
-        
-        <Paper sx={{ mb: 3 }}>
-          <Tabs
-            value={currentTab}
-            onChange={handleTabChange}
-            indicatorColor="primary"
-            textColor="primary"
-            variant="fullWidth"
-          >
-            <Tab label="Companies" />
-            <Tab label="Applications" />
-            <Tab label="Contacts" />
-          </Tabs>
-        </Paper>
+      <Container maxWidth={false} sx={{ px: 3 }}>
+        <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+          {/* Application Chart */}
+          <ApplicationChart />
+          
+          <Paper sx={{ mb: 3 }}>
+            <Tabs
+              value={currentTab}
+              onChange={handleTabChange}
+              indicatorColor="primary"
+              textColor="primary"
+              variant="fullWidth"
+            >
+              <Tab label="Companies" />
+              <Tab label="Applications" />
+              <Tab label="Contacts" />
+            </Tabs>
+          </Paper>
 
         <Box sx={{ mb: 3 }}>
           <TextField
@@ -131,6 +131,7 @@ const Dashboard = () => {
           open={isAddModalOpen}
           onClose={handleCloseAddModal}
         />
+        </Box>
       </Container>
     </Layout>
   );

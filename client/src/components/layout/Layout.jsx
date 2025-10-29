@@ -7,7 +7,7 @@ const Layout = ({ children }) => {
       <MainToolbar />
       {/* This empty Toolbar component creates space below the fixed AppBar */}
       <Toolbar />
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      <Box component="main" sx={{ flexGrow: 1, width: '100%' }}>
         {children}
       </Box>
     </Box>
