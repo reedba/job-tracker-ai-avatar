@@ -16,13 +16,13 @@ const ApplicationChart = () => {
     }
 
     const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+    const currentMonth = now.getUTCMonth();
+    const currentYear = now.getUTCFullYear();
 
     const currentMonthApps = applications.filter(app => {
       if (!app.date_submitted) return false;
       const appDate = new Date(app.date_submitted);
-      return appDate.getMonth() === currentMonth && appDate.getFullYear() === currentYear;
+      return appDate.getUTCMonth() === currentMonth && appDate.getUTCFullYear() === currentYear;
     });
 
     const count = currentMonthApps.length;
@@ -47,15 +47,22 @@ const ApplicationChart = () => {
     
     applications.forEach(app => {
       if (app.date_submitted) {
+        // Parse date and use UTC to avoid timezone issues
         const date = new Date(app.date_submitted);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const monthLabel = date.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+        // Get year and month in UTC to ensure consistency
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth();
+        const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+        
+        // Create a date object for the first of the month for proper sorting
+        const sortDate = new Date(Date.UTC(year, month, 1));
+        const monthLabel = sortDate.toLocaleString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
         
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = {
             label: monthLabel,
             count: 0,
-            date: date
+            date: sortDate
           };
         }
         monthlyData[monthKey].count++;
@@ -66,9 +73,8 @@ const ApplicationChart = () => {
     const sortedData = Object.values(monthlyData).sort((a, b) => a.date - b.date);
     
     return {
-      dates: sortedData.map((_, index) => index),
-      counts: sortedData.map(d => d.count),
-      labels: sortedData.map(d => d.label)
+      labels: sortedData.map(d => d.label),
+      counts: sortedData.map(d => d.count)
     };
   }, [applications]);
 
@@ -137,34 +143,45 @@ const ApplicationChart = () => {
             </Typography>
           </Box>
         ) : (
-          <LineChart
-            xAxis={[{ 
-              data: chartData.dates,
-              scaleType: 'point',
-              valueFormatter: (value) => chartData.labels[value] || ''
-            }]}
-            series={[
-              {
-                data: chartData.counts,
-                label: 'Applications Submitted',
-                color: '#1976d2',
-                showMark: true,
-              },
-            ]}
-            height={300}
-            margin={{ top: 10, right: 10, bottom: 30, left: 40 }}
-            sx={{
-              width: '100%',
-              '.MuiLineElement-root': {
-                strokeWidth: 2,
-              },
-              '.MuiMarkElement-root': {
-                scale: '0.8',
-                fill: '#fff',
-                strokeWidth: 2,
-              },
-            }}
-          />
+          <Box sx={{ width: '100%', height: 350 }}>
+            <LineChart
+              xAxis={[{ 
+                data: chartData.labels,
+                scaleType: 'band',
+                categoryGapRatio: 0.5,
+              }]}
+              yAxis={[{
+                min: 0,
+              }]}
+              series={[
+                {
+                  data: chartData.counts,
+                  label: 'Applications Submitted',
+                  color: '#1976d2',
+                  showMark: false,
+                  curve: 'linear',
+                },
+              ]}
+              margin={{ top: 20, right: 30, bottom: 50, left: 50 }}
+              slotProps={{
+                legend: {
+                  direction: 'row',
+                  position: { vertical: 'top', horizontal: 'middle' },
+                  padding: 0,
+                },
+              }}
+              sx={{
+                '.MuiLineElement-root': {
+                  strokeWidth: 2,
+                },
+                '.MuiMarkElement-root': {
+                  scale: '0.8',
+                  fill: '#fff',
+                  strokeWidth: 2,
+                },
+              }}
+            />
+          </Box>
         )}
       </Box>
     </Paper>
