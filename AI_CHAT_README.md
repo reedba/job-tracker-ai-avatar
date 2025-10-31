@@ -94,83 +94,52 @@ client/
 ### 3. MCP Tools
 Three specialized tools provide database access:
 
-**CompanyInsightsTool**
-- Get company information
-- Filter by name, sort by application count
-- Returns contacts, recent applications
+**GetCompaniesTool**
+- Get company information with details
+- Filter by status (active, inactive, all)
+- Returns company data, applications, contacts
 
-**ApplicationStatsTool**
-- Calculate application statistics
-- Time period filters (week, month, quarter, year)
-- Goal progress tracking
-- Status breakdown
+**GetApplicationsTool**
+- Get job application data
+- Filters: status, company_id, month, year
+- Returns detailed application information
 
-**DatabaseQueryTool**
-- Company comparisons
-- Application timelines
-- Contact lists
-- Response rate analysis
-- Status transition tracking
+**GetContactsTool**
+- Get contact information
+- Filters: company_id, role
+- Returns contact details with company info
 
-## LLM Integration (Using LangChain)
+## LLM Integration (OpenAI Function Calling)
 
-The system now uses **LangChain** for LLM integration, which provides:
-- Automatic tool orchestration via ReAct agents
-- Support for multiple LLM providers (HuggingFace, OpenAI, Claude)
-- Built-in conversation memory
-- Simplified tool calling
+The system uses **OpenAI's native function calling** for intelligent tool execution:
+- Automatic tool selection based on user queries
+- Direct OpenAI API integration
+- Native function calling support
+- Simple, maintainable architecture
 
 ### Quick Setup
 
-**Option 1: HuggingFace (Recommended - FREE!)**
+**OpenAI GPT (Required)**
 ```bash
-# Get free token: https://huggingface.co/settings/tokens
-# Add to server/.env:
-HUGGINGFACE_API_KEY=hf_xxxxxxxxxxxxx
-
-# Optional: Choose different model
-HUGGINGFACE_MODEL=mistralai/Mistral-7B-Instruct-v0.2
-```
-
-**Option 2: OpenAI GPT**
-```bash
+# Get API key: https://platform.openai.com/api-keys
 # Add to server/.env:
 OPENAI_API_KEY=sk-xxxxxxxxxxxxx
-OPENAI_MODEL=gpt-4-turbo-preview  # Optional
-```
-
-**Option 3: Anthropic Claude**
-```bash
-# Add to server/.env:
-ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxxxxx
-ANTHROPIC_MODEL=claude-3-5-sonnet-20241022  # Optional
 ```
 
 ### How It Works
 
-LangChain's `langchain_adapter.rb` handles all LLM communication:
-- Priority: HuggingFace > OpenAI > Anthropic
-- ReAct agent automatically decides when to use tools
-- Tools are converted to LangChain-compatible format
-- Responses are streamed back through WebSocket
-
-See [LANGCHAIN_HUGGINGFACE_SETUP.md](./LANGCHAIN_HUGGINGFACE_SETUP.md) for detailed setup instructions.
+The `langchain_adapter.rb` (simplified, no longer uses LangChain) handles:
+- Formats tools in OpenAI's function calling format
+- AI automatically decides when to call tools
+- Executes tools and returns results
+- Synthesizes final response with context
 
 ## Environment Setup
 
 ### Backend (.env)
 ```bash
-# Option 1: HuggingFace (FREE, recommended for development)
-HUGGINGFACE_API_KEY=hf_xxxxxxxxxxxxx
-HUGGINGFACE_MODEL=mistralai/Mistral-7B-Instruct-v0.2  # Optional
-
-# Option 2: OpenAI
+# OpenAI (Required)
 OPENAI_API_KEY=sk-xxxxxxxxxxxxx
-OPENAI_MODEL=gpt-4-turbo-preview  # Optional
-
-# Option 3: Anthropic Claude
-ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxxxxx
-ANTHROPIC_MODEL=claude-3-5-sonnet-20241022  # Optional
 ```
 
 ### Frontend (.env.development)
@@ -198,9 +167,9 @@ npm run dev
 2. Click the chat FAB (floating action button) in bottom-right
 3. Type a message like:
    - "How many applications have I submitted this month?"
-   - "Show me my top 5 companies"
-   - "What's my response rate?"
-   - "Tell me about Google"
+   - "Show me companies I'm tracking"
+   - "What contacts do I have?"
+   - "Tell me about my applications"
 
 ## Features
 
@@ -300,12 +269,9 @@ Customize `ChatWidget.jsx` - fully Material-UI components
 
 - **Setup Guides:**
   - [GET_STARTED.md](./GET_STARTED.md) - Quick 5-minute setup
-  - [LANGCHAIN_HUGGINGFACE_SETUP.md](./LANGCHAIN_HUGGINGFACE_SETUP.md) - Complete LangChain guide
-  - [LANGCHAIN_COMPLETE.md](./LANGCHAIN_COMPLETE.md) - Integration summary
+  - [AI_CHAT_README.md](./AI_CHAT_README.md) - Architecture details
 
 - **External Documentation:**
   - [Rails Action Cable Guide](https://guides.rubyonrails.org/action_cable_overview.html)
-  - [LangChain Ruby](https://github.com/patterns-ai-core/langchainrb)
-  - [HuggingFace Inference API](https://huggingface.co/docs/api-inference/index)
-  - [Anthropic Claude API](https://docs.anthropic.com/claude/reference/getting-started-with-the-api)
+  - [OpenAI Function Calling](https://platform.openai.com/docs/guides/function-calling)
   - [OpenAI API Reference](https://platform.openai.com/docs/api-reference)

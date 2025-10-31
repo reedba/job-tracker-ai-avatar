@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'openai'
+
 module Mcp
   module Llm
     class LangchainAdapter
@@ -7,21 +9,64 @@ module Mcp
 
       def initialize(tools: [])
         @client = setup_client
-        @tools = tools  # Store original tool definitions
-        @model = ENV['HUGGINGFACE_MODEL'] || 'HuggingFaceH4/zephyr-7b-beta'
+        @tools = tools
       end
 
       def call(system_prompt:, messages:, tools: [])
         # Update tools if provided
         @tools = tools if tools.any?
 
-        # Format conversation history
-        prompt = format_conversation(system_prompt, messages)
+        # Format messages for OpenAI
+        formatted_messages = [
+          { role: "system", content: system_prompt }
+        ] + messages
 
-        # Make direct API call
-        response = execute_direct(prompt)
+        # Prepare tools in OpenAI function format
+        openai_tools = format_tools_for_openai
 
-        parse_response(response)
+        # Call OpenAI with function calling
+        response = @client.chat(
+          parameters: {
+            model: 'gpt-4o-mini',
+            messages: formatted_messages,
+            tools: openai_tools.any? ? openai_tools : nil,
+            tool_choice: "auto",
+            temperature: 0.7
+          }
+        )
+
+        # Check if AI wants to call a function
+        message = response.dig('choices', 0, 'message')
+        
+        if message['tool_calls']
+          # Execute tool calls
+          tool_results = execute_tool_calls(message['tool_calls'])
+          
+          # Add assistant message and tool results to conversation
+          formatted_messages << message
+          tool_results.each do |result|
+            formatted_messages << {
+              role: "tool",
+              tool_call_id: result[:tool_call_id],
+              content: result[:content].to_json
+            }
+          end
+
+          # Get final response with tool results
+          final_response = @client.chat(
+            parameters: {
+              model: 'gpt-4o-mini',
+              messages: formatted_messages,
+              temperature: 0.7
+            }
+          )
+          
+          content = final_response.dig('choices', 0, 'message', 'content')
+        else
+          content = message['content']
+        end
+
+        parse_response(content)
       rescue StandardError => e
         Rails.logger.error "LLM Error: #{e.message}"
         Rails.logger.error e.backtrace.join("\n")
@@ -35,108 +80,47 @@ module Mcp
       private
 
       def setup_client
-        # Priority: HuggingFace > OpenAI > Anthropic
-        if ENV['HUGGINGFACE_API_KEY'].present?
-          setup_huggingface_client
-        elsif ENV['OPENAI_API_KEY'].present?
-          setup_openai_client
-        elsif ENV['ANTHROPIC_API_KEY'].present?
-          setup_anthropic_client
+        if ENV['OPENAI_API_KEY'].present?
+          OpenAI::Client.new(access_token: ENV['OPENAI_API_KEY'])
         else
-          raise 'No LLM API key configured. Set HUGGINGFACE_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY'
+          raise 'No OPENAI_API_KEY configured'
         end
       end
 
-      def setup_huggingface_client
-        # HuggingFace Inference API integration - using new router endpoint
-        # Return a simple struct that responds to our API
-        Struct.new(:api_key, :base_url).new(
-          ENV['HUGGINGFACE_API_KEY'],
-          'https://api-inference.huggingface.co'
-        )
-      end
-
-      def setup_openai_client
-        require 'openai'
-        
-        OpenAI::Client.new(
-          access_token: ENV['OPENAI_API_KEY']
-        )
-      end
-
-      def setup_anthropic_client
-        require 'anthropic'
-        
-        Anthropic::Client.new(
-          access_token: ENV['ANTHROPIC_API_KEY']
-        )
-      end
-
-      def format_conversation(system_prompt, messages)
-        formatted = "System: #{system_prompt}\n\n"
-        
-        messages.each do |msg|
-          role = msg[:role] == 'assistant' ? 'Assistant' : 'User'
-          formatted += "#{role}: #{msg[:content]}\n\n"
-        end
-        
-        formatted
-      end
-
-      def execute_direct(prompt)
-        # Check which client we're using and call the appropriate API
-        if @client.is_a?(OpenAI::Client)
-          execute_openai(prompt)
-        else
-          execute_huggingface(prompt)
-        end
-      end
-
-      def execute_openai(prompt)
-        response = @client.chat(
-          parameters: {
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7
-          }
-        )
-        response.dig('choices', 0, 'message', 'content')
-      end
-
-      def execute_huggingface(prompt)
-        require 'faraday'
-        
-        conn = Faraday.new(url: @client.base_url) do |f|
-          f.request :json
-          f.response :json
-          f.adapter Faraday.default_adapter
-        end
-
-        response = conn.post("/models/#{@model}") do |req|
-          req.headers['Authorization'] = "Bearer #{@client.api_key}"
-          req.headers['Content-Type'] = 'application/json'
-          req.body = { 
-            inputs: prompt,
-            parameters: {
-              max_new_tokens: 500,
-              temperature: 0.7,
-              return_full_text: false
+      def format_tools_for_openai
+        @tools.map do |tool|
+          {
+            type: "function",
+            function: {
+              name: tool.name,
+              description: tool.description,
+              parameters: tool.parameters
             }
           }
         end
-        
-        # Parse response
-        result = response.body
-        if result.is_a?(Array) && result.first.is_a?(Hash)
-          result.first['generated_text']
-        elsif result.is_a?(Hash)
-          result['generated_text'] || result['error'] || result.to_s
-        else
-          result.to_s
+      end
+
+      def execute_tool_calls(tool_calls)
+        tool_calls.map do |tool_call|
+          tool_name = tool_call.dig('function', 'name')
+          arguments = JSON.parse(tool_call.dig('function', 'arguments') || '{}', symbolize_names: true)
+          
+          # Find the matching tool
+          tool = @tools.find { |t| t.name == tool_name }
+          
+          if tool
+            result = tool.execute(arguments)
+            {
+              tool_call_id: tool_call['id'],
+              content: result
+            }
+          else
+            {
+              tool_call_id: tool_call['id'],
+              content: { error: "Tool #{tool_name} not found" }
+            }
+          end
         end
-      rescue => e
-        Rails.logger.error "HuggingFace API Error: #{e.message}"
-        "Error connecting to AI service"
       end
 
       def parse_response(response)

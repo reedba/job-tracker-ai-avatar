@@ -1,22 +1,20 @@
 # 🚀 Quick Start: Get Your API Key
 
-## Fastest Path: HuggingFace (FREE!)
+## Setup: OpenAI API Key (Required)
 
-### 1. Create Account (2 minutes)
-👉 https://huggingface.co/join
+### 1. Create OpenAI Account (2 minutes)
+👉 https://platform.openai.com/signup
 
-### 2. Generate Token (1 minute)
-1. Go to: https://huggingface.co/settings/tokens
-2. Click "New token"
+### 2. Generate API Key (1 minute)
+1. Go to: https://platform.openai.com/api-keys
+2. Click "Create new secret key"
 3. Name: `job-tracker-chat`
-4. Type: **Read**
-5. Click "Generate"
-6. Copy token (starts with `hf_`)
+4. Copy key (starts with `sk-`)
 
 ### 3. Add to Your Project
 Create or edit `server/.env`:
 ```bash
-HUGGINGFACE_API_KEY=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### 4. Restart Server
@@ -35,33 +33,19 @@ rails s
 ## That's It!
 
 Your AI chat is now powered by:
-- ✅ LangChain for orchestration
-- ✅ HuggingFace Mistral-7B model
-- ✅ Automatic tool calling
-- ✅ FREE tier (rate-limited)
+- ✅ OpenAI GPT-4o-mini (fast and affordable)
+- ✅ Native function calling for tool use
+- ✅ Direct API integration
+- ✅ Simple, maintainable code
 
-### Want More?
+### Cost Estimate
 
-**Better Models:**
-```bash
-# In server/.env
-HUGGINGFACE_MODEL=mistralai/Mixtral-8x7B-Instruct-v0.1  # Bigger model
-```
+OpenAI GPT-4o-mini pricing:
+- **$0.15** per 1M input tokens
+- **$0.60** per 1M output tokens
+- Typical chat: **$0.001-0.01** per conversation
 
-**No Rate Limits:**
-- HuggingFace Pro: $9/month
-- OR use OpenAI/Claude (see main docs)
-
----
-
-## External Setup Requirements: ZERO! ✨
-
-Everything runs through HuggingFace API:
-- ❌ No local model installation
-- ❌ No GPU required
-- ❌ No Docker containers
-- ❌ No complex setup
-- ✅ Just an API key!
+Very affordable for personal use!
 
 ---
 
@@ -69,25 +53,18 @@ Everything runs through HuggingFace API:
 
 **"No LLM API key configured"**
 - Make sure `.env` file is in `server/` directory
-- Verify token starts with `hf_`
+- Verify key starts with `sk-`
 - Restart Rails server
 
-**Slow first response?**
-- HuggingFace free tier "warms up" model on first use
-- Second request will be faster
-- Normal behavior!
-
-**Rate limit hit?**
-- Free tier has limits
-- Wait 10-30 seconds
-- Upgrade to Pro if needed
+**Need more free credits?**
+- OpenAI gives $5 free credits on new accounts
+- Add payment method for pay-as-you-go
 
 ---
 
 ## Need Help?
 
 See full documentation:
-- [LANGCHAIN_HUGGINGFACE_SETUP.md](./LANGCHAIN_HUGGINGFACE_SETUP.md) - Complete guide
 - [AI_CHAT_README.md](./AI_CHAT_README.md) - Architecture details
 
 Enjoy your AI-powered job tracker! 🎯

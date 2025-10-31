@@ -6,8 +6,8 @@ module Mcp
 
     def initialize(user)
       @user = user
-      @tools = load_tools
-      @langchain_adapter = Mcp::Llm::LangchainAdapter.new(tools: prepare_tools_for_langchain)
+      @langchain_tools = initialize_langchain_tools
+      @langchain_adapter = Mcp::Llm::LangchainAdapter.new(tools: @langchain_tools)
     end
 
     # Main method to process a user query
@@ -24,7 +24,7 @@ module Mcp
       response = @langchain_adapter.call(
         system_prompt: system_prompt,
         messages: messages,
-        tools: prepare_tools_for_langchain
+        tools: @langchain_tools
       )
       
       response[:content]
@@ -32,24 +32,13 @@ module Mcp
 
     private
 
-    def load_tools
-      {
-        get_companies: Mcp::Tools::CompanyInsightsTool.new(user),
-        get_applications: Mcp::Tools::ApplicationStatsTool.new(user),
-        query_database: Mcp::Tools::DatabaseQueryTool.new(user)
-      }
-    end
-
-    def prepare_tools_for_langchain
-      # Convert our tools to LangChain-compatible format
-      @tools.map do |name, tool|
-        {
-          name: name.to_s,
-          description: tool.description,
-          parameters: tool.parameters,
-          executor: ->(params) { tool.execute(params) }
-        }
-      end
+    def initialize_langchain_tools
+      # Create instances of LangChain-compatible tools
+      [
+        Mcp::Tools::GetCompaniesTool.new(user: @user),
+        Mcp::Tools::GetApplicationsTool.new(user: @user),
+        Mcp::Tools::GetContactsTool.new(user: @user)
+      ]
     end
 
     def build_context
@@ -70,7 +59,7 @@ module Mcp
     def build_system_prompt(context)
       <<~PROMPT
         You are a helpful job search assistant for #{context[:user_name]}. 
-        You have access to their job application tracking data.
+        You have access to their job application tracking data through tools.
         
         Current Stats:
         - Companies tracked: #{context[:total_companies]}
@@ -80,11 +69,14 @@ module Mcp
         - This month's applications: #{context[:current_month_applications]}
         
         Available Tools:
-        - get_companies: Get detailed information about tracked companies
-        - get_applications: Get application statistics and trends
-        - query_database: Run specific queries on the database
+        - get_companies: Get detailed information about all tracked companies (with optional status filter)
+        - get_applications: Get detailed application data (with optional filters: status, company_id, month, year)
+        - get_contacts: Get contact information (with optional filters: company_id, role)
         
-        Be concise, helpful, and provide actionable insights. Use the tools when needed to answer questions accurately.
+        When a user asks about specific data (like "show me applications" or "what companies do I have"), 
+        USE THE TOOLS to fetch the actual data instead of just referring to the summary stats above.
+        
+        Be concise, helpful, and provide actionable insights based on the actual data from the tools.
       PROMPT
     end
   end

@@ -4,9 +4,10 @@
 
 A complete AI-powered chat assistant for your job tracking app with:
 - ✅ Real-time WebSocket communication (Action Cable)
-- ✅ MCP client architecture with 3 database query tools
+- ✅ OpenAI function calling for intelligent tool use
+- ✅ Three database query tools (companies, applications, contacts)
 - ✅ Frontend chat widget with React
-- ✅ Ready for Claude or OpenAI integration
+- ✅ Simple, maintainable architecture
 
 ## File Structure Created
 
@@ -23,11 +24,11 @@ server/app/
 │   └── mcp/
 │       ├── client.rb              # Main MCP client
 │       ├── llm/
-│       │   └── langchain_adapter.rb  # LangChain integration (HuggingFace/OpenAI/Claude)
+│       │   └── langchain_adapter.rb  # OpenAI function calling (simplified)
 │       └── tools/
-│           ├── company_insights_tool.rb
-│           ├── application_stats_tool.rb
-│           └── database_query_tool.rb
+│           ├── get_companies_tool.rb
+│           ├── get_applications_tool.rb
+│           └── get_contacts_tool.rb
 ```
 
 ### Frontend (React)
@@ -39,35 +40,18 @@ client/src/
     └── cable.js                   # WebSocket consumer
 ```
 
-## Next: Add Your LLM API Key
+## Next: Add Your OpenAI API Key
 
-**✨ Now using LangChain with multiple provider support!**
+**Using OpenAI with native function calling**
 
-### Option 1: HuggingFace (Recommended - FREE!)
-1. Get API token: https://huggingface.co/settings/tokens
-2. Add to `server/.env`:
-   ```bash
-   HUGGINGFACE_API_KEY=hf_xxxxxxxxxxxxx
-   HUGGINGFACE_MODEL=mistralai/Mistral-7B-Instruct-v0.2  # Optional
-   ```
-
-### Option 2: Use OpenAI GPT
+### Get OpenAI API Key
 1. Get API key: https://platform.openai.com/api-keys
 2. Add to `server/.env`:
    ```bash
    OPENAI_API_KEY=sk-xxxxxxxxxxxxx
-   OPENAI_MODEL=gpt-4-turbo-preview  # Optional
    ```
 
-### Option 3: Use Anthropic Claude
-1. Get API key: https://console.anthropic.com/
-2. Add to `server/.env`:
-   ```bash
-   ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
-   ANTHROPIC_MODEL=claude-3-5-sonnet-20241022  # Optional
-   ```
-
-**Priority:** HuggingFace > OpenAI > Anthropic (first key found is used)
+**Cost:** Very affordable - GPT-4o-mini is $0.15 per 1M input tokens, $0.60 per 1M output tokens (typically $0.001-0.01 per chat session)
 
 ## Test It Out
 
@@ -75,7 +59,7 @@ client/src/
 ```bash
 # Backend
 cd server
-bundle install  # ✅ Done - langchainrb, hugging-face, ruby-openai installed
+bundle install  # ✅ Done - ruby-openai installed
 
 # Frontend
 cd client
@@ -94,41 +78,36 @@ npm run dev
 ```
 
 ### 3. Try These Questions
-- "How many applications have I submitted this month?"
-- "What's my top company by application count?"
-- "Show me my application statistics for the last week"
-- "Tell me about [Company Name]"
-- "What's my response rate?"
-- "Am I on track to meet my monthly goal?"
+- "Show me all companies I'm tracking"
+- "What applications did I submit this month?"
+- "Who are my contacts?"
+- "Tell me about my recent applications"
 
 ## What Each Tool Does
 
-### 1. CompanyInsightsTool
+### 1. GetCompaniesTool
 Queries:
-- Company details with contacts
-- Filter/sort by name or application count
-- Recent applications per company
+- Get all companies tracked by user
+- Filter by status (active, inactive)
+- Returns company details with metadata
 
-Example: "Tell me about Google" or "Which companies do I apply to most?"
+Example: "Show me companies I'm tracking"
 
-### 2. ApplicationStatsTool
+### 2. GetApplicationsTool
 Queries:
-- Application counts and trends
-- Status breakdown (Applied, Interview, Offer, Rejected)
-- Monthly averages
-- Goal progress tracking
+- Get job applications
+- Filter by status, company, month, year
+- Returns detailed application data
 
-Example: "How many applications this month?" or "What's my success rate?"
+Example: "Show my applications from October"
 
-### 3. DatabaseQueryTool
-Advanced queries:
-- Company comparisons
-- Application timelines
-- Contact lists by company/role
-- Response rate analysis
-- Status transitions
+### 3. GetContactsTool
+Queries:
+- Get contact information
+- Filter by company or role
+- Returns contact details
 
-Example: "Compare Google and Amazon" or "Show my contacts at tech companies"
+Example: "Show me contacts at Google"
 
 ## How It Works
 
@@ -141,15 +120,15 @@ ChatChannel receives → ChatService
     ↓
 ChatService → MCP Client
     ↓
-MCP Client → LangChain Adapter
+OpenAI Function Calling Adapter
     ↓
-LangChain ReAct Agent (with HuggingFace/OpenAI/Claude)
-    ├─→ Reasons: "Need application stats"
-    └─→ Calls ApplicationStatsTool
+OpenAI GPT-4o-mini
+    ├─→ Decides: "Need application data"
+    └─→ Calls GetApplicationsTool
         ↓
 Tool queries database (filtered by user)
     ↓
-Results → Agent synthesizes answer
+Results → OpenAI synthesizes answer
     ↓
 Response → WebSocket → ChatWidget
 ```
@@ -223,36 +202,28 @@ Edit `client/src/components/chat/ChatWidget.jsx`
 
 ## Cost Estimates
 
-### Anthropic Claude
-- ~$3 per 1M input tokens
-- ~$15 per 1M output tokens
-- Typical chat: 1000-5000 tokens = $0.005-0.10 per conversation
-
-### OpenAI GPT-4
-- ~$10 per 1M input tokens
-- ~$30 per 1M output tokens
-- Similar costs per conversation
+### OpenAI GPT-4o-mini
+- ~$0.15 per 1M input tokens
+- ~$0.60 per 1M output tokens
+- Typical chat: 1000-5000 tokens = $0.001-0.01 per conversation
+- Very affordable for personal use!
 
 ## Resources
 
 - **Setup Guides:**
   - [GET_STARTED.md](./GET_STARTED.md) - Quick 5-minute setup
-  - [LANGCHAIN_HUGGINGFACE_SETUP.md](./LANGCHAIN_HUGGINGFACE_SETUP.md) - Complete guide
   - [AI_CHAT_README.md](./AI_CHAT_README.md) - Full architecture docs
   
 - **External:**
   - [Rails Action Cable](https://guides.rubyonrails.org/action_cable_overview.html)
-  - [LangChain Ruby](https://github.com/patterns-ai-core/langchainrb)
-  - [HuggingFace](https://huggingface.co/docs/api-inference/index)
+  - [OpenAI Function Calling](https://platform.openai.com/docs/guides/function-calling)
+  - [OpenAI API Reference](https://platform.openai.com/docs/api-reference)
 
 ## What's Next?
 
-1. **Add API Key** - HuggingFace (free), OpenAI, or Claude
+1. **Add OpenAI API Key** - Get from https://platform.openai.com/api-keys
 2. **Test the chat** with example questions
 3. **Customize tools** for your needs
-4. **Tune model settings** in `langchain_adapter.rb`
-5. **Deploy to production** with Redis
+4. **Deploy to production** with Redis
 
-The architecture is complete and production-ready! Just add your LLM API key to start chatting with your database. 
-
-**Using LangChain:** Automatic tool orchestration, multi-provider support, built-in memory! 🚀
+The architecture is complete and production-ready! Just add your OpenAI API key to start chatting with your database. 🚀
