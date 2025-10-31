@@ -16,6 +16,7 @@ import ApplicationsTable from '../applications/ApplicationsTable';
 import ContactsTable from '../contacts/ContactsTable';
 import AddCompanyModal from '../companies/AddCompanyModal';
 import ApplicationChart from './ApplicationChart';
+import ChatWidget from '../chat/ChatWidget';
 
 const TabPanel = ({ children, value, index, ...other }) => {
   return (
@@ -131,6 +132,9 @@ const Dashboard = () => {
           open={isAddModalOpen}
           onClose={handleCloseAddModal}
         />
+
+        {/* Chat Widget */}
+        <ChatWidget />
         </Box>
       </Container>
     </Layout>
