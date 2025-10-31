@@ -67,8 +67,8 @@ class SessionsController < ApplicationController
       first_name: user.first_name,
       last_name: user.last_name,
       full_name: user.full_name,
-      roles: user.roles,
-      last_login: Time.current
+      is_admin: user.is_admin,
+      last_login: user.last_login
     }
   end
 end

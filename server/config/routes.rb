@@ -1,6 +1,9 @@
 Rails.application.routes.draw do
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
+  # Mount Action Cable for WebSocket connections
+  mount ActionCable.server => '/cable'
+
   scope '/api' do
     # User management
     resources :users

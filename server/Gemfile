@@ -29,6 +29,9 @@ gem "solid_cable"
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 
+# Load environment variables from .env file
+gem 'dotenv-rails', groups: [:development, :test]
+
 # Deploy this application anywhere as a Docker container [https://kamal-deploy.org]
 gem "kamal", require: false
 
@@ -40,6 +43,15 @@ gem "thruster", require: false
 
 # Use Active Model Serializers for JSON serialization
 gem 'active_model_serializers'
+
+# HTTP client for external API calls (LLM services)
+gem 'faraday'
+gem 'faraday-retry'
+
+# LangChain for LLM orchestration and HuggingFace integration
+gem 'langchainrb', '~> 0.17'
+gem 'ruby-openai', '~> 7.0'  # Used by langchainrb
+gem 'hugging-face', '~> 0.3'  # HuggingFace client
 
 # Use Rack CORS for handling Cross-Origin Resource Sharing (CORS), making cross-origin Ajax possible
 # gem "rack-cors"
