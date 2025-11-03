@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { logout } from '../auth/authSlice';
 import api from '../../services/api';
 
 export const fetchApplications = createAsyncThunk(
@@ -144,6 +145,13 @@ const applicationsSlice = createSlice({
       .addCase(deleteApplication.rejected, (state, action) => {
         state.error = action.payload || 'Failed to delete application';
       });
+
+    // Reset applications state on logout to avoid showing previous user's apps
+    builder.addCase(logout.fulfilled, (state) => {
+      state.items = [];
+      state.status = 'idle';
+      state.error = null;
+    });
   },
 });
 

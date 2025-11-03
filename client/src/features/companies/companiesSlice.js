@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { logout } from '../auth/authSlice';
 import { createApplication } from '../applications/applicationsSlice';
 import api from '../../services/api';
 
@@ -214,6 +215,13 @@ const companiesSlice = createSlice({
       .addCase(deleteCompany.rejected, (state, action) => {
         state.error = action.payload || 'Failed to delete company';
       });
+
+    // Reset companies state on logout to avoid leaking previous user's data
+    builder.addCase(logout.fulfilled, (state) => {
+      state.items = [];
+      state.status = 'idle';
+      state.error = null;
+    });
   }
 });
 
