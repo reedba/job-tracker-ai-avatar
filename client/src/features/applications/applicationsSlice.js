@@ -113,7 +113,14 @@ const applicationsSlice = createSlice({
       })
       // Create application
       .addCase(createApplication.fulfilled, (state, action) => {
-        state.items.push(action.payload.application);
+        // Ensure the application stored in state contains the updated company
+        // data returned by the server (if any). This lets UI components
+        // show the company name immediately without requiring a refresh.
+        const application = action.payload.application;
+        if (action.payload.company) {
+          application.company = action.payload.company;
+        }
+        state.items.push(application);
       })
       // Update application
       .addCase(updateApplication.pending, (state) => {
