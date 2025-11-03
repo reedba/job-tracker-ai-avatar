@@ -23,6 +23,34 @@ import {
 } from '../../features/applications/applicationsSlice';
 import EditApplicationModal from './EditApplicationModal';
 
+// Helper to produce human-friendly labels regardless of incoming casing
+const humanize = (val) => {
+  if (!val && val !== 0) return 'N/A';
+  const str = String(val).toLowerCase().replace(/_/g, ' ');
+  return str.split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+};
+
+const formatEmploymentType = (val) => {
+  if (!val) return 'N/A';
+  const map = {
+    direct_hire: 'Direct Hire',
+    contractor: 'Contractor'
+  };
+  const key = String(val).toLowerCase();
+  return map[key] || humanize(key);
+};
+
+const formatWorkMode = (val) => {
+  if (!val) return 'N/A';
+  const map = {
+    onsite: 'Onsite',
+    remote: 'Remote',
+    hybrid: 'Hybrid'
+  };
+  const key = String(val).toLowerCase();
+  return map[key] || humanize(key);
+};
+
 const ApplicationsTable = ({ searchFilter = '' }) => {
   const dispatch = useDispatch();
   const applications = useSelector(selectAllApplications);
@@ -98,8 +126,8 @@ const ApplicationsTable = ({ searchFilter = '' }) => {
                 <TableRow key={application.id}>
                   <TableCell>{application.company?.name || 'N/A'}</TableCell>
                   <TableCell>{application.title}</TableCell>
-                  <TableCell>{application.employment_type || 'N/A'}</TableCell>
-                  <TableCell>{application.work_mode || 'N/A'}</TableCell>
+                  <TableCell>{formatEmploymentType(application.employment_type)}</TableCell>
+                  <TableCell>{formatWorkMode(application.work_mode)}</TableCell>
                   <TableCell>
                     {application.date_submitted
                       ? new Date(application.date_submitted).toLocaleString('en-US', {
