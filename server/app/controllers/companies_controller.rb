@@ -4,6 +4,13 @@ class CompaniesController < ApplicationController
   before_action :set_company, only: [:show, :update, :destroy]
 
   def index
+    # Safety: ensure we always scope companies to the authenticated user
+    if current_user.nil?
+      Rails.logger.warn "Companies#index called without authenticated user"
+      return render json: { companies: [] }, status: :unauthorized
+    end
+
+    Rails.logger.info "Companies#index - current_user: id=#{current_user.id} email=#{current_user.email}"
     @companies = current_user.companies.includes(:applications)
     companies_data = ActiveModelSerializers::SerializableResource.new(
       @companies,
