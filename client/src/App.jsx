@@ -5,6 +5,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/dashboard/Dashboard';
 import AIAvatar from './components/ai/AIAvatar';
+import Layout from './components/layout/Layout';
 import { useSelector } from 'react-redux';
 
 import axios from 'axios';
@@ -34,9 +35,19 @@ function App() {
             element={token ? <Dashboard /> : <Navigate to="/login" />}
           />
 
+          {/* Publicly accessible AI Avatar page: show toolbar only when logged in */}
           <Route
             path="/avatar"
-            element={token ? <AIAvatar /> : <Navigate to="/login" />}
+            element={
+              token ? (
+                <Layout>
+                  <AIAvatar />
+                </Layout>
+              ) : (
+                // Public view without the app Layout/toolbar
+                <AIAvatar />
+              )
+            }
           />
 
           {/* Redirect root to login or dashboard based on auth state */}
