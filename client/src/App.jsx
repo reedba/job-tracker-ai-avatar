@@ -4,6 +4,7 @@ import { darkTheme } from './theme/darkTheme';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/dashboard/Dashboard';
+import AIAvatar from './components/ai/AIAvatar';
 import { useSelector } from 'react-redux';
 
 import axios from 'axios';
@@ -31,6 +32,11 @@ function App() {
           <Route
             path="/dashboard"
             element={token ? <Dashboard /> : <Navigate to="/login" />}
+          />
+
+          <Route
+            path="/avatar"
+            element={token ? <AIAvatar /> : <Navigate to="/login" />}
           />
 
           {/* Redirect root to login or dashboard based on auth state */}

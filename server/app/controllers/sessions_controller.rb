@@ -68,7 +68,8 @@ class SessionsController < ApplicationController
       last_name: user.last_name,
       full_name: user.full_name,
       is_admin: user.is_admin,
-      last_login: user.last_login
+      created_at: user.created_at,
+      updated_at: user.updated_at
     }
   end
 end
