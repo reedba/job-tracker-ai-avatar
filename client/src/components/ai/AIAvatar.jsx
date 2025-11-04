@@ -28,6 +28,7 @@ const AIAvatar = () => {
   const [startingSession, setStartingSession] = useState(false);
   const [sessionToken, setSessionToken] = useState(null);
   const [sessionExpiresAt, setSessionExpiresAt] = useState(null);
+  const [remaining, setRemaining] = useState(null);
 
   // AvatarLinks redux state
   const avatarLinksStatus = useSelector((state) => state.avatarLinks.status);
@@ -48,18 +49,39 @@ const AIAvatar = () => {
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
-  // If visiting a public avatar URL like /avatar/:token and not logged in,
-  // verify the token and show a modal asking to "Begin Interview".
+  // Try to restore an active guest session from sessionStorage so a browser
+  // refresh won't force the visitor to re-open the modal if they've already
+  // begun the interview in this tab.
   useEffect(() => {
     const tokenFromUrl = params?.token;
     if (!tokenFromUrl) return;
 
-    // If a logged-in user is present, don't show the public modal
+    // If logged-in user exists, nothing to restore for public guest flows
     if (user) return;
 
-    // If a session is already active, skip verify
-    if (sessionToken) return;
+    try {
+      const stored = sessionStorage.getItem(`avatar_session:${tokenFromUrl}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.session_token && parsed?.expires_at) {
+          const expires = new Date(parsed.expires_at);
+          if (expires > new Date()) {
+            setSessionToken(parsed.session_token);
+            setSessionExpiresAt(parsed.expires_at);
+            setShowVerifyModal(false);
+            return; // restored, skip verify
+          } else {
+            // expired, remove stored value
+            sessionStorage.removeItem(`avatar_session:${tokenFromUrl}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('failed restoring avatar session from storage', e);
+    }
 
+    // No valid stored session; proceed to verify the link with the server.
+    if (sessionToken) return; // session established elsewhere
     setShowVerifyModal(true);
     setLinkValid(null);
 
@@ -92,6 +114,12 @@ const AIAvatar = () => {
         setSessionToken(session_token);
         setSessionExpiresAt(expires_at);
         setShowVerifyModal(false);
+        // Persist session for this tab so refresh won't prompt again.
+        try {
+          sessionStorage.setItem(`avatar_session:${params?.token}`, JSON.stringify({ session_token, expires_at }));
+        } catch (e) {
+          console.warn('failed to persist avatar session in sessionStorage', e);
+        }
       } else {
         console.warn('no session_token in response', res.data);
       }
@@ -103,6 +131,60 @@ const AIAvatar = () => {
       setStartingSession(false);
     }
   };
+
+  // When a sessionExpiresAt is present, set a timer to clear the stored
+  // session and local state when the session JWT expires.
+  useEffect(() => {
+    if (!sessionExpiresAt || !params?.token) return;
+    const expiresAtDate = new Date(sessionExpiresAt);
+    const ms = expiresAtDate - new Date();
+    if (ms <= 0) {
+      // already expired
+      try { sessionStorage.removeItem(`avatar_session:${params.token}`); } catch (e) {}
+      setSessionToken(null);
+      setSessionExpiresAt(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      try { sessionStorage.removeItem(`avatar_session:${params.token}`); } catch (e) {}
+      setSessionToken(null);
+      setSessionExpiresAt(null);
+    }, ms);
+    return () => clearTimeout(t);
+  }, [sessionExpiresAt, params]);
+
+  // Countdown display for active guest session
+  useEffect(() => {
+    if (!sessionExpiresAt || !params?.token) {
+      setRemaining(null);
+      return;
+    }
+
+    const formatMs = (ms) => {
+      const total = Math.max(0, Math.floor(ms / 1000));
+      const hrs = Math.floor(total / 3600);
+      const mins = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+      if (hrs > 0) return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    };
+
+    const update = () => {
+      const ms = new Date(sessionExpiresAt) - new Date();
+      if (ms <= 0) {
+        try { sessionStorage.removeItem(`avatar_session:${params.token}`); } catch (e) {}
+        setSessionToken(null);
+        setSessionExpiresAt(null);
+        setRemaining(null);
+        return;
+      }
+      setRemaining(formatMs(ms));
+    };
+
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [sessionExpiresAt, params]);
 
   // Setup ActionCable subscription for inline chat.
   // We only open a subscription when either:
@@ -211,6 +293,11 @@ const AIAvatar = () => {
             <Typography variant="body2" color="text.secondary">
               This page provides a chat interface for interacting with the AI assistant. Public visitors can chat, and admins have extra controls.
             </Typography>
+            {remaining && (
+              <Typography variant="subtitle2" color="primary" sx={{ mt: 1 }}>
+                Session time remaining: {remaining}
+              </Typography>
+            )}
           </Box>
         </Box>
 

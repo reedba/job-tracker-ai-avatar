@@ -53,13 +53,9 @@ class AvatarLinksController < ApplicationController
       return render json: { error: 'Link not active or not found' }, status: :forbidden
     end
 
-    # Increment usage and deactivate if max reached
-    begin
-      link.increment_use!
-    rescue => e
-      Rails.logger.error "Failed to increment AvatarLink usage: #{e.message}"
-      return render json: { error: 'Failed to start session' }, status: :internal_server_error
-    end
+    # We no longer track per-link usage counts. Session lifetime is enforced
+    # by the short-lived JWT issued below; keep the link active until its
+    # expires_at timestamp elapses (or an admin deactivates it).
 
     # Build a short-lived session token (1 hour)
     exp = 1.hour.from_now.to_i

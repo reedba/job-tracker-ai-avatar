@@ -7,18 +7,20 @@ class AvatarLink < ApplicationRecord
 
   scope :active_links, -> { where(active: true).where("expires_at IS NULL OR expires_at > ?", Time.current) }
 
+  # Active means the link is marked active and has not passed its expiry time.
+  # We intentionally do NOT track or enforce a maximum number of uses here;
+  # session lifetime is governed by the short-lived session JWT issued at
+  # `start_session`. This keeps links usable by multiple visitors until the
+  # expires_at timestamp (if present) elapses.
   def active?
-    active && (expires_at.nil? || expires_at > Time.current) && used_count < max_uses
+    active && (expires_at.nil? || expires_at > Time.current)
   end
 
-  # Atomically increment usage and deactivate if max reached
+  # Historically we incremented a usage counter and disabled the link when
+  # max_uses was reached. That behavior has been removed; keep a no-op
+  # method for backward compatibility in case callers still call it.
   def increment_use!
-    with_lock do
-      self.used_count += 1
-      if used_count >= max_uses
-        self.active = false
-      end
-      save!
-    end
+    # no-op: usage counts are no longer enforced
+    true
   end
 end
