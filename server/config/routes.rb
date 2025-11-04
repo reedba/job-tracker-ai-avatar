@@ -30,10 +30,26 @@ Rails.application.routes.draw do
     
     # Settings management (singular resource - one per user)
     resource :setting, only: [:show, :update]
+    
+    # Avatar link endpoints (temporary shareable links for AI Avatar)
+    resources :avatar_links, only: [:create] do
+      collection do
+        get :verify
+      end
+      member do
+        post :start_session
+      end
+    end
   end
 
   # Health check endpoint
   get "up" => "rails/health#show", as: :rails_health_check
+
+  # Development helper: redirect avatar links to the frontend dev server so
+  # visiting /avatar/:token in development opens the React route served by Vite.
+  if Rails.env.development?
+    get '/avatar/:token', to: redirect('http://localhost:5173/avatar/%{token}')
+  end
 
   # Defines the root path route ("/")
   # root "posts#index"

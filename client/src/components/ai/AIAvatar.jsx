@@ -1,11 +1,14 @@
-import { Box, Container, Typography, Paper, Button, Avatar, TextField, IconButton, List, ListItem, CircularProgress } from '@mui/material';
+import { Box, Container, Typography, Paper, Button, Avatar, TextField, IconButton, List, ListItem, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import axios from '../../config/axios';
+import { useParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import SendIcon from '@mui/icons-material/Send';
 import { useState, useEffect, useRef } from 'react';
 import { getConsumer } from '../../utils/cable';
+import { createAvatarLink } from '../../features/avatarLinks/avatarLinksSlice';
 import { Person as PersonIcon, SmartToy as BotIcon } from '@mui/icons-material';
 
 const AIAvatar = () => {
@@ -15,6 +18,21 @@ const AIAvatar = () => {
   const isAdmin = Boolean(user && (user.is_admin === true || user.is_admin === 'true' || user.is_admin === 1 || user.is_admin === '1'));
   const [generatedUrl, setGeneratedUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const dispatch = useDispatch();
+  const params = useParams();
+
+  // Public session state
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [linkValid, setLinkValid] = useState(null); // null = unknown, true/false
+  const [linkData, setLinkData] = useState(null);
+  const [startingSession, setStartingSession] = useState(false);
+  const [sessionToken, setSessionToken] = useState(null);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState(null);
+
+  // AvatarLinks redux state
+  const avatarLinksStatus = useSelector((state) => state.avatarLinks.status);
+  const lastCreatedLink = useSelector((state) => state.avatarLinks.lastCreated);
+  const avatarLinksError = useSelector((state) => state.avatarLinks.error);
 
   // Inline chat state
   const [isOpen, setIsOpen] = useState(true);
@@ -30,9 +48,84 @@ const AIAvatar = () => {
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
-  // Setup ActionCable subscription for inline chat
+  // If visiting a public avatar URL like /avatar/:token and not logged in,
+  // verify the token and show a modal asking to "Begin Interview".
   useEffect(() => {
-    const consumer = getConsumer();
+    const tokenFromUrl = params?.token;
+    if (!tokenFromUrl) return;
+
+    // If a logged-in user is present, don't show the public modal
+    if (user) return;
+
+    // If a session is already active, skip verify
+    if (sessionToken) return;
+
+    setShowVerifyModal(true);
+    setLinkValid(null);
+
+    const verify = async () => {
+      try {
+        setLinkValid(null);
+        const res = await axios.get(`/api/avatar_links/verify?token=${encodeURIComponent(tokenFromUrl)}`);
+        if (res?.data?.valid) {
+          setLinkValid(true);
+          setLinkData(res.data);
+        } else {
+          setLinkValid(false);
+        }
+      } catch (e) {
+        console.warn('verify failed', e);
+        setLinkValid(false);
+      }
+    };
+
+    verify();
+  }, [params, user, sessionToken]);
+
+  const handleBeginInterview = async () => {
+    if (!linkData) return;
+    setStartingSession(true);
+    try {
+      const res = await axios.post(`/api/avatar_links/${linkData.id}/start_session`);
+      const { session_token, expires_at } = res.data;
+      if (session_token) {
+        setSessionToken(session_token);
+        setSessionExpiresAt(expires_at);
+        setShowVerifyModal(false);
+      } else {
+        console.warn('no session_token in response', res.data);
+      }
+    } catch (e) {
+      console.error('start_session failed', e);
+      // show an error in modal (simple approach)
+      setLinkValid(false);
+    } finally {
+      setStartingSession(false);
+    }
+  };
+
+  // Setup ActionCable subscription for inline chat.
+  // We only open a subscription when either:
+  //  - a logged-in auth token is present in localStorage, or
+  //  - a guest `sessionToken` exists (after Begin Interview is clicked).
+  // This prevents anonymous visitors from opening a long-lived websocket that
+  // could be abused to consume backend/OpenAI resources.
+  useEffect(() => {
+    const authToken = localStorage.getItem('token');
+    const tokenToUse = sessionToken || authToken;
+
+    if (!tokenToUse) {
+      // No token available; do not create a consumer yet.
+      return undefined;
+    }
+
+    // Clean up any previous subscription
+    if (subscriptionRef.current) {
+      try { subscriptionRef.current.unsubscribe(); } catch (e) {}
+      subscriptionRef.current = null;
+    }
+
+    const consumer = getConsumer(tokenToUse);
     try {
       subscriptionRef.current = consumer.subscriptions.create({ channel: 'ChatChannel' }, {
         connected() { setIsConnected(true); },
@@ -59,7 +152,7 @@ const AIAvatar = () => {
         subscriptionRef.current = null;
       }
     };
-  }, []);
+  }, [sessionToken, user]);
 
   const handleSendMessage = () => {
     if (!inputValue.trim() || isLoading || !isConnected) return;
@@ -77,12 +170,24 @@ const AIAvatar = () => {
   };
 
   const handleGenerateUrl = () => {
-    // Placeholder URL generation - replace with server-side generated URL when available
-    const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-    const url = `${window.location.origin}/avatar/${token}`;
-    setGeneratedUrl(url);
-    setCopied(false);
+    if (!isAdmin) return;
+    // Dispatch the avatar link creation thunk. Payload can be extended
+    dispatch(createAvatarLink({ name: 'Interview', max_uses: 1 }));
   };
+
+  // When a new link is created via the slice, update the generatedUrl shown in the UI
+  useEffect(() => {
+    if (lastCreatedLink && lastCreatedLink.url) {
+      setGeneratedUrl(lastCreatedLink.url);
+      setCopied(false);
+    } else if (lastCreatedLink && lastCreatedLink.token) {
+      setGeneratedUrl(`${window.location.origin}/avatar/${lastCreatedLink.token}`);
+      setCopied(false);
+    }
+    if (avatarLinksStatus === 'failed' && avatarLinksError) {
+      alert(`Failed to create link: ${avatarLinksError}`);
+    }
+  }, [lastCreatedLink, avatarLinksStatus, avatarLinksError]);
 
   const handleCopy = async () => {
     if (!generatedUrl) return;
@@ -117,7 +222,9 @@ const AIAvatar = () => {
           {/* Admin-only generate URL control */}
           {isAdmin && (
             <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center' }}>
-              <Button variant="contained" onClick={handleGenerateUrl}>Generate URL</Button>
+              <Button variant="contained" onClick={handleGenerateUrl} disabled={avatarLinksStatus === 'loading'}>
+                {avatarLinksStatus === 'loading' ? <CircularProgress size={18} sx={{ color: 'white' }} /> : 'Generate URL'}
+              </Button>
               <TextField
                 value={generatedUrl}
                 placeholder="Generated URL will appear here"
@@ -164,6 +271,43 @@ const AIAvatar = () => {
           </Box>
         </Box>
       </Paper>
+
+      {/* Public verify / begin interview modal (for unauthenticated visitors) */}
+      <Dialog open={showVerifyModal} onClose={() => setShowVerifyModal(false)}>
+        <DialogTitle>Begin Interview</DialogTitle>
+        <DialogContent>
+          {linkValid === null && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 300 }}>
+              <CircularProgress size={20} />
+              <Typography>Checking link...</Typography>
+            </Box>
+          )}
+
+          {linkValid === false && (
+            <Typography color="error">This interview link is invalid, expired, or has already been used.</Typography>
+          )}
+
+          {linkValid === true && linkData && (
+            <Box sx={{ minWidth: 320 }}>
+              <Typography variant="subtitle1">{linkData.name || 'Interview Session'}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                This will start a 1-hour interview session for this AI avatar. You will be connected as a guest.
+              </Typography>
+              {linkData.expires_at && (
+                <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
+                  Link expires at: {new Date(linkData.expires_at).toLocaleString()}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowVerifyModal(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleBeginInterview} disabled={!linkValid || startingSession}>
+            {startingSession ? <CircularProgress size={18} sx={{ color: 'white' }} /> : 'Begin Interview'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

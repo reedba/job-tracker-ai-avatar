@@ -2,12 +2,18 @@ import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import authReducer from '../features/auth/authSlice';
 import companiesReducer from '../features/companies/companiesSlice';
 import applicationsReducer from '../features/applications/applicationsSlice';
+import settingsReducer from '../features/settings/settingsSlice';
+import avatarLinksReducer from '../features/avatarLinks/avatarLinksSlice';
+import contactsReducer from '../features/contacts/contactsSlice';
 
 // Combine per-slice reducers into an app reducer
 const appReducer = combineReducers({
   auth: authReducer,
   companies: companiesReducer,
   applications: applicationsReducer,
+  settings: settingsReducer,
+  contacts: contactsReducer,
+  avatarLinks: avatarLinksReducer,
 });
 
 // Root reducer wrapper: intercept logout (fulfilled) and reset the whole state

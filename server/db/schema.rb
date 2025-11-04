@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_10_29_162919) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_03_204541) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -29,6 +29,20 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_29_162919) do
     t.index ["company_id"], name: "index_applications_on_company_id"
     t.check_constraint "employment_type::text = ANY (ARRAY['contractor'::character varying, 'direct_hire'::character varying]::text[])", name: "check_valid_employment_type"
     t.check_constraint "work_mode::text = ANY (ARRAY['remote'::character varying, 'hybrid'::character varying, 'onsite'::character varying]::text[])", name: "check_valid_work_mode"
+  end
+
+  create_table "avatar_links", force: :cascade do |t|
+    t.string "token", null: false
+    t.bigint "creator_id", null: false
+    t.string "name"
+    t.datetime "expires_at"
+    t.integer "max_uses", default: 1, null: false
+    t.integer "used_count", default: 0, null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["creator_id"], name: "index_avatar_links_on_creator_id"
+    t.index ["token"], name: "index_avatar_links_on_token", unique: true
   end
 
   create_table "companies", force: :cascade do |t|
@@ -81,6 +95,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_10_29_162919) do
   end
 
   add_foreign_key "applications", "companies"
+  add_foreign_key "avatar_links", "users", column: "creator_id"
   add_foreign_key "companies", "users"
   add_foreign_key "contacts", "companies"
   add_foreign_key "settings", "users"

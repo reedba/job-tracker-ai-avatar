@@ -50,6 +50,20 @@ function App() {
             }
           />
 
+          {/* Support direct links like /avatar/:token for public/shared avatar links */}
+          <Route
+            path="/avatar/:token"
+            element={
+              token ? (
+                <Layout>
+                  <AIAvatar />
+                </Layout>
+              ) : (
+                <AIAvatar />
+              )
+            }
+          />
+
           {/* Redirect root to login or dashboard based on auth state */}
           <Route
             path="/"
