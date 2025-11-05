@@ -232,13 +232,17 @@ const AIAvatar = () => {
             // Clear any existing auto-send timeout
             if (autoSendTimeoutRef.current) {
               clearTimeout(autoSendTimeoutRef.current);
+              autoSendTimeoutRef.current = null;
             }
             
-            // Auto-send after a brief delay
-            if (trimmedText) {
+            // Auto-send after a brief delay - only if we have meaningful text
+            if (trimmedText && trimmedText.length > 1) {
+              console.log('Setting auto-send timeout for:', trimmedText);
               autoSendTimeoutRef.current = setTimeout(() => {
+                console.log('Auto-sending message:', trimmedText);
                 handleSendMessage(trimmedText);
-              }, 2000); // 2 second delay for auto-send
+                setInputValue(''); // Clear input after sending
+              }, 1500); // Reduced to 1.5 seconds for faster response
             }
           }
         }
@@ -252,6 +256,25 @@ const AIAvatar = () => {
       recognitionRef.current.onend = () => {
         console.log('Speech recognition ended');
         setIsListening(false);
+        
+        // If we have text in the input and are not in wake word mode, auto-send it
+        if (!isWakeWordMode && inputValue.trim() && inputValue.trim().length > 1) {
+          console.log('Speech ended with text, auto-sending:', inputValue.trim());
+          // Clear any existing timeout
+          if (autoSendTimeoutRef.current) {
+            clearTimeout(autoSendTimeoutRef.current);
+            autoSendTimeoutRef.current = null;
+          }
+          // Send immediately when speech recognition ends
+          setTimeout(() => {
+            const textToSend = inputValue.trim();
+            if (textToSend) {
+              console.log('Sending message on speech end:', textToSend);
+              handleSendMessage(textToSend);
+              setInputValue('');
+            }
+          }, 500); // Small delay to ensure UI updates
+        }
         
         // Restart if in wake word mode
         if (isWakeWordMode && speechEnabled) {
@@ -272,6 +295,22 @@ const AIAvatar = () => {
     // Initialize speech synthesis
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       synthRef.current = window.speechSynthesis;
+      
+      // Load voices - sometimes they're not immediately available
+      const loadVoices = () => {
+        const voices = synthRef.current.getVoices();
+        console.log('Speech synthesis voices loaded:', voices.length);
+      };
+      
+      // Load voices immediately if available
+      loadVoices();
+      
+      // Also load voices when they become available
+      if (synthRef.current.onvoiceschanged !== undefined) {
+        synthRef.current.onvoiceschanged = loadVoices;
+      }
+    } else {
+      console.warn('Speech synthesis not supported in this browser');
     }
 
     return () => {
@@ -285,7 +324,7 @@ const AIAvatar = () => {
         clearTimeout(autoSendTimeoutRef.current);
       }
     };
-  }, [isWakeWordMode, speechEnabled, isSpeaking]);
+  }, [isWakeWordMode, speechEnabled, isSpeaking, inputValue]);
 
   // Try to restore an active guest session from sessionStorage so a browser
   // refresh won't force the visitor to re-open the modal if they've already
@@ -548,12 +587,13 @@ const AIAvatar = () => {
       return;
     }
     
+    console.log('Sending message:', messageText);
+    
     const userMessage = { id: Date.now(), text: messageText, sender: 'user', timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     
     try {
-      console.log('Sending message:', messageText);
       subscriptionRef.current.send({ message: messageText });
     } catch (e) {
       console.error('Failed to send message:', e);
@@ -568,12 +608,10 @@ const AIAvatar = () => {
       setMessages(prev => [...prev, errorMessage]);
     }
     
-    // Clear input only if not from speech
-    if (!speechText) {
-      setInputValue('');
-    }
+    // Always clear input after sending
+    setInputValue('');
     
-    // Stop listening when sending message
+    // Stop listening when sending message (but not if in wake word mode)
     if (isListening && !isWakeWordMode) {
       stopListening();
     }
@@ -682,63 +720,92 @@ const AIAvatar = () => {
 
   // Text-to-speech function
   const speakText = (text) => {
-    if (synthRef.current && voiceEnabled) {
-      // Cancel any current speech
-      synthRef.current.cancel();
-      
-      // Stop listening to prevent audio feedback loop
-      const wasListening = isListening;
-      const wasInWakeWordMode = isWakeWordMode;
-      
-      if (isListening || isWakeWordMode) {
-        console.log('Pausing speech recognition during TTS to prevent feedback loop');
-        stopListening();
-      }
-      
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-      utterance.volume = 1;
-      
-      utterance.onstart = () => {
-        console.log('TTS started - speech recognition paused');
-        setIsSpeaking(true);
-      };
-      
-      utterance.onend = () => {
-        console.log('TTS ended - resuming speech recognition if was active');
-        setIsSpeaking(false);
-        
-        // Resume listening if it was active before
-        if (wasListening || wasInWakeWordMode) {
-          setTimeout(() => {
-            if (wasInWakeWordMode) {
-              startListening(true); // Resume wake word mode
-            } else if (wasListening) {
-              startListening(false); // Resume normal listening
-            }
-          }, 500); // Small delay to ensure TTS is fully stopped
-        }
-      };
-      
-      utterance.onerror = () => {
-        console.log('TTS error - resuming speech recognition if was active');
-        setIsSpeaking(false);
-        
-        // Resume listening if it was active before
-        if (wasListening || wasInWakeWordMode) {
-          setTimeout(() => {
-            if (wasInWakeWordMode) {
-              startListening(true);
-            } else if (wasListening) {
-              startListening(false);
-            }
-          }, 500);
-        }
-      };
-      
-      synthRef.current.speak(utterance);
+    console.log('speakText called with:', { text, voiceEnabled, synthRef: !!synthRef.current });
+    
+    if (!synthRef.current) {
+      console.warn('Speech synthesis not available');
+      return;
     }
+    
+    if (!voiceEnabled) {
+      console.log('Voice disabled, skipping TTS');
+      return;
+    }
+    
+    if (!text || typeof text !== 'string') {
+      console.warn('Invalid text for TTS:', text);
+      return;
+    }
+    
+    // Cancel any current speech
+    synthRef.current.cancel();
+    
+    // Stop listening to prevent audio feedback loop
+    const wasListening = isListening;
+    const wasInWakeWordMode = isWakeWordMode;
+    
+    if (isListening || isWakeWordMode) {
+      console.log('Pausing speech recognition during TTS to prevent feedback loop');
+      stopListening();
+    }
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+    
+    // Get available voices and set a preferred one
+    const voices = synthRef.current.getVoices();
+    console.log('Available voices:', voices.length);
+    
+    if (voices.length > 0) {
+      // Try to find an English voice
+      const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+        console.log('Using voice:', englishVoice.name);
+      }
+    }
+    
+    utterance.onstart = () => {
+      console.log('TTS started - speech recognition paused');
+      setIsSpeaking(true);
+    };
+    
+    utterance.onend = () => {
+      console.log('TTS ended - resuming speech recognition if was active');
+      setIsSpeaking(false);
+      
+      // Resume listening if it was active before
+      if (wasListening || wasInWakeWordMode) {
+        setTimeout(() => {
+          if (wasInWakeWordMode) {
+            startListening(true); // Resume wake word mode
+          } else if (wasListening) {
+            startListening(false); // Resume normal listening
+          }
+        }, 500); // Small delay to ensure TTS is fully stopped
+      }
+    };
+    
+    utterance.onerror = (event) => {
+      console.error('TTS error:', event.error);
+      setIsSpeaking(false);
+      
+      // Resume listening if it was active before
+      if (wasListening || wasInWakeWordMode) {
+        setTimeout(() => {
+          if (wasInWakeWordMode) {
+            startListening(true);
+          } else if (wasListening) {
+            startListening(false);
+          }
+        }, 500);
+      }
+    };
+    
+    console.log('Starting TTS for text:', text.substring(0, 50) + '...');
+    synthRef.current.speak(utterance);
   };
 
   const toggleVoice = () => {
@@ -747,6 +814,11 @@ const AIAvatar = () => {
       setIsSpeaking(false);
     }
     setVoiceEnabled(!voiceEnabled);
+  };
+
+  const testTTS = () => {
+    console.log('Testing TTS...');
+    speakText("Hello, this is a test of the text to speech system.");
   };
 
   const handleGenerateUrl = () => {
@@ -959,6 +1031,17 @@ const AIAvatar = () => {
                 >
                   <VolumeUpIcon fontSize="small" />
                 </Fab>
+                
+                {/* Test TTS Button */}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={testTTS}
+                  disabled={!voiceEnabled}
+                  sx={{ ml: 1 }}
+                >
+                  Test Voice
+                </Button>
               </Box>
             </Paper>
           </Box>
