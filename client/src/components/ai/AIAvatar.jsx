@@ -440,7 +440,7 @@ const AIAvatar = () => {
             <Box sx={{ minWidth: 320 }}>
               <Typography variant="subtitle1">{linkData.name || 'Interview Session'}</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                This will start a 2-minute interview session for this AI avatar. You will be connected as a guest.
+                This will start a 1-hour interview session for this AI avatar. You will be connected as a guest.
               </Typography>
               {linkData.expires_at && (
                 <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>
