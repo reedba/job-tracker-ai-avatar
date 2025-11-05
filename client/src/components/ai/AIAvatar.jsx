@@ -1,4 +1,4 @@
-import { Box, Container, Typography, Paper, Button, Avatar, TextField, IconButton, List, ListItem, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Container, Typography, Paper, Button, Avatar, TextField, IconButton, List, ListItem, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Fab } from '@mui/material';
 import axios from '../../config/axios';
 import { useParams } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
@@ -6,10 +6,17 @@ import { useSelector, useDispatch } from 'react-redux';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
 import SendIcon from '@mui/icons-material/Send';
+import MicIcon from '@mui/icons-material/Mic';
+import MicOffIcon from '@mui/icons-material/MicOff';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import { useState, useEffect, useRef } from 'react';
 import { getConsumer } from '../../utils/cable';
 import { createAvatarLink } from '../../features/avatarLinks/avatarLinksSlice';
-import { Person as PersonIcon, SmartToy as BotIcon } from '@mui/icons-material';
+import PersonIcon from '@mui/icons-material/Person';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
+import { PorcupineWorker } from '@picovoice/porcupine-web';
+import { WebVoiceProcessor } from '@picovoice/web-voice-processor';
 
 const AIAvatar = () => {
   const navigate = useNavigate();
@@ -46,8 +53,233 @@ const AIAvatar = () => {
   const subscriptionRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  // Speech recognition state
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isWakeWordMode, setIsWakeWordMode] = useState(false);
+  const [wakeWordDetected, setWakeWordDetected] = useState(false);
+  const recognitionRef = useRef(null);
+  const synthRef = useRef(null);
+  const autoSendTimeoutRef = useRef(null);
+  const porcupineWorkerRef = useRef(null);
+  const webVoiceProcessorRef = useRef(null);
+
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
+
+  // Initialize Porcupine wake word detection
+  useEffect(() => {
+    const initializePorcupine = async () => {
+      try {
+        console.log('Initializing Porcupine wake word detection...');
+        
+        // Use the built-in "hey siri" wake word as a placeholder 
+        // (we'll use speech recognition to detect "hey brandon" after wake word triggers)
+        porcupineWorkerRef.current = await PorcupineWorker.create(
+          process.env.REACT_APP_PICOVOICE_ACCESS_KEY || 'demo', // You'll need to get a free API key from Picovoice
+          [{ builtin: 'hey siri' }], // Using built-in wake word
+          (keywordIndex) => {
+            console.log('Wake word detected by Porcupine!');
+            setWakeWordDetected(true);
+            
+            // Start regular speech recognition after wake word detection
+            if (recognitionRef.current && speechEnabled) {
+              try {
+                recognitionRef.current.start();
+              } catch (e) {
+                console.warn('Failed to start speech recognition after wake word:', e);
+              }
+            }
+          }
+        );
+
+        webVoiceProcessorRef.current = await WebVoiceProcessor.init({
+          engines: [porcupineWorkerRef.current],
+          start: false
+        });
+
+        console.log('Porcupine initialized successfully');
+      } catch (error) {
+        console.warn('Failed to initialize Porcupine:', error);
+        console.log('Falling back to Web Speech API for wake word detection');
+      }
+    };
+
+    initializePorcupine();
+
+    return () => {
+      if (porcupineWorkerRef.current) {
+        porcupineWorkerRef.current.terminate();
+      }
+      if (webVoiceProcessorRef.current) {
+        webVoiceProcessorRef.current.release();
+      }
+    };
+  }, []);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onstart = () => {
+        console.log('Speech recognition started');
+        setIsListening(true);
+      };
+
+      recognitionRef.current.onresult = (event) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          console.log('Final transcript:', finalTranscript);
+          
+          // Check if this was triggered by wake word detection
+          if (wakeWordDetected) {
+            console.log('Processing speech after wake word detection');
+            setWakeWordDetected(false);
+            
+            // Check if user said "hey brandon" or similar
+            const lowerTranscript = finalTranscript.toLowerCase();
+            if (lowerTranscript.includes('brandon') || lowerTranscript.includes('hey')) {
+              // Extract command after wake phrase
+              let command = finalTranscript.trim();
+              
+              // Remove common wake phrases
+              command = command.replace(/^(hey\s+)?(brandon\s*)/i, '').trim();
+              
+              console.log('Command after wake word:', command);
+              
+              if (command) {
+                setInputValue(command);
+                setTimeout(() => handleSendMessage(command), 100);
+              } else {
+                // No command after wake word, just acknowledge
+                setInputValue('');
+                const wakeMessage = { 
+                  id: Date.now(), 
+                  text: "Yes? How can I help you?", 
+                  sender: 'bot', 
+                  timestamp: new Date() 
+                };
+                setMessages(prev => [...prev, wakeMessage]);
+                
+                if (voiceEnabled) {
+                  speakText("Yes? How can I help you?");
+                }
+              }
+            }
+            
+            // Restart wake word detection
+            if (isWakeWordMode && webVoiceProcessorRef.current) {
+              setTimeout(() => {
+                webVoiceProcessorRef.current.start();
+              }, 1000);
+            }
+          } else if (isWakeWordMode && finalTranscript.toLowerCase().includes('hey brandon')) {
+            // Fallback to old method if Porcupine isn't working
+            console.log('Wake word detected via speech recognition fallback');
+            setIsWakeWordMode(false);
+            
+            const afterWakeWord = finalTranscript.toLowerCase().split('hey brandon')[1]?.trim();
+            console.log('Text after wake word:', afterWakeWord);
+            
+            if (afterWakeWord) {
+              setInputValue(afterWakeWord);
+              setTimeout(() => handleSendMessage(afterWakeWord), 100);
+            } else {
+              setInputValue('');
+              const wakeMessage = { 
+                id: Date.now(), 
+                text: "Yes? How can I help you?", 
+                sender: 'bot', 
+                timestamp: new Date() 
+              };
+              setMessages(prev => [...prev, wakeMessage]);
+              
+              if (voiceEnabled) {
+                speakText("Yes? How can I help you?");
+              }
+            }
+          } else if (!isWakeWordMode) {
+            // Normal speech input - update input field
+            const trimmedText = finalTranscript.trim();
+            console.log('Normal speech input:', trimmedText);
+            setInputValue(trimmedText);
+            
+            // Clear any existing auto-send timeout
+            if (autoSendTimeoutRef.current) {
+              clearTimeout(autoSendTimeoutRef.current);
+            }
+            
+            // Auto-send after a brief delay
+            if (trimmedText) {
+              autoSendTimeoutRef.current = setTimeout(() => {
+                handleSendMessage(trimmedText);
+              }, 2000); // 2 second delay for auto-send
+            }
+          }
+        }
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        console.log('Speech recognition ended');
+        setIsListening(false);
+        
+        // Restart if in wake word mode
+        if (isWakeWordMode && speechEnabled) {
+          console.log('Restarting speech recognition for wake word mode');
+          setTimeout(() => {
+            if (recognitionRef.current && isWakeWordMode) {
+              try {
+                recognitionRef.current.start();
+              } catch (e) {
+                console.warn('Failed to restart speech recognition:', e);
+              }
+            }
+          }, 1000);
+        }
+      };
+    }
+
+    // Initialize speech synthesis
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      synthRef.current = window.speechSynthesis;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (synthRef.current) {
+        synthRef.current.cancel();
+      }
+      if (autoSendTimeoutRef.current) {
+        clearTimeout(autoSendTimeoutRef.current);
+      }
+    };
+  }, [isWakeWordMode, speechEnabled]);
 
   // Try to restore an active guest session from sessionStorage so a browser
   // refresh won't force the visitor to re-open the modal if they've already
@@ -204,15 +436,14 @@ const AIAvatar = () => {
     return () => clearInterval(id);
   }, [sessionExpiresAt, params]);
 
-  // Setup ActionCable subscription for inline chat.
   // Setup ActionCable subscription for Avatar chat.
-  // Phase 1: Basic echo channel for testing WebSocket plumbing
   useEffect(() => {
     const authToken = localStorage.getItem('token');
     const tokenToUse = sessionToken || authToken;
 
     if (!tokenToUse) {
       // No token available; do not create a consumer yet.
+      setIsConnected(false);
       return undefined;
     }
 
@@ -220,62 +451,253 @@ const AIAvatar = () => {
 
     // Clean up any previous subscription
     if (subscriptionRef.current) {
-      try { subscriptionRef.current.unsubscribe(); } catch (e) {}
+      try { 
+        subscriptionRef.current.unsubscribe(); 
+        console.log('Previous subscription cleaned up');
+      } catch (e) {
+        console.warn('Error cleaning up previous subscription:', e);
+      }
       subscriptionRef.current = null;
     }
 
-    const consumer = getConsumer(tokenToUse);
-    try {
-      subscriptionRef.current = consumer.subscriptions.create({ channel: 'AvatarChannel' }, {
-        connected() { 
-          console.log('AvatarChannel connected');
-          setIsConnected(true); 
-        },
-        disconnected() { 
-          console.log('AvatarChannel disconnected');
-          setIsConnected(false); 
-        },
-        received(data) {
-          console.log('AvatarChannel received:', data);
-          
-          if (data.type === 'connection') {
-            console.log('Connection confirmed:', data.message);
-          } else if (data.type === 'message') {
-            setMessages(prev => [...prev, { id: Date.now(), text: data.text, sender: 'bot', timestamp: new Date(data.timestamp || Date.now()) }]);
-            setIsLoading(false);
-          } else if (data.type === 'status') {
-            setIsLoading(data.status === 'typing');
-          } else if (data.type === 'error') {
-            setMessages(prev => [...prev, { id: Date.now(), text: data.message, sender: 'bot', timestamp: new Date() }]);
-            setIsLoading(false);
+    // Small delay to ensure cleanup is complete
+    const setupTimer = setTimeout(() => {
+      const consumer = getConsumer(tokenToUse);
+      try {
+        subscriptionRef.current = consumer.subscriptions.create({ channel: 'AvatarChannel' }, {
+          connected() { 
+            console.log('AvatarChannel connected');
+            setIsConnected(true); 
+          },
+          disconnected() { 
+            console.log('AvatarChannel disconnected');
+            setIsConnected(false); 
+          },
+          received(data) {
+            console.log('AvatarChannel received:', data);
+            
+            if (data.type === 'connection') {
+              console.log('Connection confirmed:', data.message);
+            } else if (data.type === 'message') {
+              const newMessage = { id: Date.now(), text: data.text, sender: 'bot', timestamp: new Date(data.timestamp || Date.now()) };
+              setMessages(prev => [...prev, newMessage]);
+              setIsLoading(false);
+              
+              // Speak the AI response if voice is enabled
+              if (voiceEnabled && data.text) {
+                speakText(data.text);
+              }
+            } else if (data.type === 'status') {
+              setIsLoading(data.status === 'typing');
+            } else if (data.type === 'error') {
+              const errorMessage = { id: Date.now(), text: data.message, sender: 'bot', timestamp: new Date() };
+              setMessages(prev => [...prev, errorMessage]);
+              setIsLoading(false);
+              
+              // Speak error messages too if voice is enabled
+              if (voiceEnabled && data.message) {
+                speakText(data.message);
+              }
+            }
           }
-        }
-      });
-    } catch (e) {
-      console.warn('AvatarChannel subscription failed', e);
-    }
+        });
+        console.log('New subscription created');
+      } catch (e) {
+        console.warn('AvatarChannel subscription failed', e);
+        setIsConnected(false);
+      }
+    }, 100);
 
     return () => {
+      clearTimeout(setupTimer);
       if (subscriptionRef.current) {
-        try { subscriptionRef.current.unsubscribe(); } catch (e) {}
+        try { 
+          subscriptionRef.current.unsubscribe(); 
+          console.log('Subscription cleaned up on unmount');
+        } catch (e) {
+          console.warn('Error during cleanup:', e);
+        }
         subscriptionRef.current = null;
       }
     };
-  }, [sessionToken, user]);
+  }, [sessionToken, user, voiceEnabled]); // Added voiceEnabled to dependencies
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim() || isLoading || !isConnected) return;
-    const userMessage = { id: Date.now(), text: inputValue, sender: 'user', timestamp: new Date() };
+  const handleSendMessage = (speechText = null) => {
+    // Clear any pending auto-send timeout
+    if (autoSendTimeoutRef.current) {
+      clearTimeout(autoSendTimeoutRef.current);
+      autoSendTimeoutRef.current = null;
+    }
+    
+    const messageText = speechText || inputValue.trim();
+    if (!messageText || isLoading || !isConnected) {
+      console.warn('Cannot send message:', { messageText, isLoading, isConnected });
+      return;
+    }
+    
+    // Check if subscription is still valid
+    if (!subscriptionRef.current) {
+      console.warn('No active subscription available');
+      setIsConnected(false);
+      return;
+    }
+    
+    const userMessage = { id: Date.now(), text: messageText, sender: 'user', timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
-    if (subscriptionRef.current) {
-      try { subscriptionRef.current.send({ message: inputValue }); } catch (e) { console.warn(e); }
+    
+    try {
+      console.log('Sending message:', messageText);
+      subscriptionRef.current.send({ message: messageText });
+    } catch (e) {
+      console.error('Failed to send message:', e);
+      setIsLoading(false);
+      // Add error message to chat
+      const errorMessage = { 
+        id: Date.now() + 1, 
+        text: 'Failed to send message. Please check your connection.', 
+        sender: 'bot', 
+        timestamp: new Date() 
+      };
+      setMessages(prev => [...prev, errorMessage]);
     }
-    setInputValue('');
+    
+    // Clear input only if not from speech
+    if (!speechText) {
+      setInputValue('');
+    }
+    
+    // Stop listening when sending message
+    if (isListening && !isWakeWordMode) {
+      stopListening();
+    }
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
+    if (e.key === 'Enter' && !e.shiftKey) { 
+      e.preventDefault(); 
+      handleSendMessage(); 
+    }
+  };
+
+  const handleSendClick = () => {
+    handleSendMessage();
+  };
+
+  // Speech recognition functions
+  const startListening = (wakeWordMode = false) => {
+    if (!speechEnabled) return;
+    
+    console.log('Starting speech recognition, wake word mode:', wakeWordMode);
+    setIsWakeWordMode(wakeWordMode);
+    
+    if (wakeWordMode) {
+      // Start Porcupine wake word detection
+      if (webVoiceProcessorRef.current) {
+        try {
+          webVoiceProcessorRef.current.start();
+          console.log('Porcupine wake word detection started');
+        } catch (e) {
+          console.warn('Failed to start Porcupine, falling back to speech recognition:', e);
+          // Fallback to old method
+          if (recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+            } catch (err) {
+              console.warn('Failed to start speech recognition:', err);
+              setIsListening(false);
+              setIsWakeWordMode(false);
+            }
+          }
+        }
+      } else {
+        // Fallback if Porcupine not available
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+          } catch (e) {
+            console.warn('Failed to start speech recognition:', e);
+            setIsListening(false);
+            setIsWakeWordMode(false);
+          }
+        }
+      }
+    } else {
+      // Normal speech recognition
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (e) {
+          console.warn('Failed to start speech recognition:', e);
+          setIsListening(false);
+          setIsWakeWordMode(false);
+        }
+      }
+    }
+  };
+
+  const stopListening = () => {
+    console.log('Stopping speech recognition');
+    
+    // Stop Porcupine
+    if (webVoiceProcessorRef.current) {
+      try {
+        webVoiceProcessorRef.current.stop();
+      } catch (e) {
+        console.warn('Error stopping Porcupine:', e);
+      }
+    }
+    
+    // Stop speech recognition
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    
+    setIsWakeWordMode(false);
+    setWakeWordDetected(false);
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening(false);
+    }
+  };
+
+  const toggleWakeWordMode = () => {
+    console.log('Toggling wake word mode, current state:', isWakeWordMode);
+    if (isWakeWordMode) {
+      stopListening();
+    } else {
+      startListening(true);
+    }
+  };
+
+  // Text-to-speech function
+  const speakText = (text) => {
+    if (synthRef.current && voiceEnabled) {
+      // Cancel any current speech
+      synthRef.current.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      
+      synthRef.current.speak(utterance);
+    }
+  };
+
+  const toggleVoice = () => {
+    if (isSpeaking) {
+      synthRef.current?.cancel();
+    }
+    setVoiceEnabled(!voiceEnabled);
   };
 
   const handleGenerateUrl = () => {
@@ -325,6 +747,31 @@ const AIAvatar = () => {
                 Session time remaining: {remaining}
               </Typography>
             )}
+            {/* Speech Status Indicator */}
+            {(isListening || isSpeaking || isWakeWordMode) && (
+              <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                {isListening && !isWakeWordMode && (
+                  <Typography variant="caption" sx={{ color: '#f44336', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <MicIcon fontSize="small" /> Listening...
+                  </Typography>
+                )}
+                {isListening && isWakeWordMode && (
+                  <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <MicIcon fontSize="small" /> Listening for "Hey Brandon"...
+                  </Typography>
+                )}
+                {isSpeaking && (
+                  <Typography variant="caption" sx={{ color: '#2196f3', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <VolumeUpIcon fontSize="small" /> Speaking...
+                  </Typography>
+                )}
+                {isWakeWordMode && !isListening && (
+                  <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+                    👂 Wake Word Mode Active (Say wake word + "Brandon")
+                  </Typography>
+                )}
+              </Box>
+            )}
           </Box>
         </Box>
 
@@ -359,7 +806,7 @@ const AIAvatar = () => {
                 {messages.map((message) => (
                   <ListItem key={message.id} sx={{ display: 'flex', flexDirection: message.sender === 'user' ? 'row-reverse' : 'row', gap: 1 }}>
                     <Avatar sx={{ width: 32, height: 32, bgcolor: message.sender === 'user' ? 'primary.main' : 'secondary.main' }}>
-                      {message.sender === 'user' ? <PersonIcon /> : <BotIcon />}
+                      {message.sender === 'user' ? <PersonIcon /> : <SmartToyIcon />}
                     </Avatar>
                     <Box sx={{ bgcolor: message.sender === 'user' ? 'primary.light' : 'white', p: 1.25, borderRadius: 1, maxWidth: '80%' }}>
                       <Typography variant="body2" sx={{ color: message.sender === 'user' ? 'white' : '#1a237e' }}>{message.text}</Typography>
@@ -407,7 +854,62 @@ const AIAvatar = () => {
                     }
                   }}
                 />
-                <IconButton color="primary" onClick={handleSendMessage} disabled={!inputValue.trim() || !isConnected}><SendIcon /></IconButton>
+                <IconButton color="primary" onClick={handleSendClick} disabled={!inputValue.trim() || !isConnected}><SendIcon /></IconButton>
+              </Box>
+
+              {/* Speech Controls */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2 }}>
+                {/* Microphone Button */}
+                <Fab
+                  color={isListening ? 'secondary' : 'primary'}
+                  onClick={toggleListening}
+                  disabled={!isConnected}
+                  size="small"
+                  sx={{ 
+                    backgroundColor: isListening ? '#f44336' : '#2196f3',
+                    '&:hover': {
+                      backgroundColor: isListening ? '#d32f2f' : '#1976d2'
+                    }
+                  }}
+                >
+                  {isListening ? <MicIcon /> : <MicOffIcon />}
+                </Fab>
+                
+                {/* Wake Word Mode Toggle */}
+                <Fab
+                  color={isWakeWordMode ? 'success' : 'default'}
+                  onClick={toggleWakeWordMode}
+                  disabled={!isConnected}
+                  size="small"
+                  sx={{ 
+                    backgroundColor: isWakeWordMode ? '#4caf50' : '#e0e0e0',
+                    color: isWakeWordMode ? 'white' : '#757575',
+                    '&:hover': {
+                      backgroundColor: isWakeWordMode ? '#388e3c' : '#d5d5d5'
+                    }
+                  }}
+                  title="Wake Word Mode (Hey Brandon)"
+                >
+                  <VolumeUpIcon fontSize="small" />
+                </Fab>
+                
+                {/* Voice Response Toggle */}
+                <Fab
+                  color={voiceEnabled ? 'info' : 'default'}
+                  onClick={toggleVoice}
+                  disabled={!isConnected}
+                  size="small"
+                  sx={{ 
+                    backgroundColor: voiceEnabled ? '#2196f3' : '#e0e0e0',
+                    color: voiceEnabled ? 'white' : '#757575',
+                    '&:hover': {
+                      backgroundColor: voiceEnabled ? '#1976d2' : '#d5d5d5'
+                    }
+                  }}
+                  title="Voice Responses"
+                >
+                  <VolumeUpIcon fontSize="small" />
+                </Fab>
               </Box>
             </Paper>
           </Box>

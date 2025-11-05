@@ -16,6 +16,8 @@
     "@mui/material": "^7.3.4",
     "@mui/x-charts": "^8.15.0",
     "@mui/x-date-pickers": "^8.15.0",
+    "@picovoice/porcupine-web": "^3.0.3",
+    "@picovoice/web-voice-processor": "^4.0.9",
     "@rails/actioncable": "^8.1.100",
     "@reduxjs/toolkit": "^2.9.1",
     "axios": "^1.12.2",
