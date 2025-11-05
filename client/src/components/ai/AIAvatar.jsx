@@ -135,6 +135,12 @@ const AIAvatar = () => {
       };
 
       recognitionRef.current.onresult = (event) => {
+        // Ignore speech recognition while AI is speaking to prevent feedback loop
+        if (isSpeaking) {
+          console.log('Ignoring speech recognition while AI is speaking');
+          return;
+        }
+        
         let finalTranscript = '';
         let interimTranscript = '';
 
@@ -279,7 +285,7 @@ const AIAvatar = () => {
         clearTimeout(autoSendTimeoutRef.current);
       }
     };
-  }, [isWakeWordMode, speechEnabled]);
+  }, [isWakeWordMode, speechEnabled, isSpeaking]);
 
   // Try to restore an active guest session from sessionStorage so a browser
   // refresh won't force the visitor to re-open the modal if they've already
@@ -680,14 +686,56 @@ const AIAvatar = () => {
       // Cancel any current speech
       synthRef.current.cancel();
       
+      // Stop listening to prevent audio feedback loop
+      const wasListening = isListening;
+      const wasInWakeWordMode = isWakeWordMode;
+      
+      if (isListening || isWakeWordMode) {
+        console.log('Pausing speech recognition during TTS to prevent feedback loop');
+        stopListening();
+      }
+      
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.9;
       utterance.pitch = 1;
       utterance.volume = 1;
       
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      utterance.onstart = () => {
+        console.log('TTS started - speech recognition paused');
+        setIsSpeaking(true);
+      };
+      
+      utterance.onend = () => {
+        console.log('TTS ended - resuming speech recognition if was active');
+        setIsSpeaking(false);
+        
+        // Resume listening if it was active before
+        if (wasListening || wasInWakeWordMode) {
+          setTimeout(() => {
+            if (wasInWakeWordMode) {
+              startListening(true); // Resume wake word mode
+            } else if (wasListening) {
+              startListening(false); // Resume normal listening
+            }
+          }, 500); // Small delay to ensure TTS is fully stopped
+        }
+      };
+      
+      utterance.onerror = () => {
+        console.log('TTS error - resuming speech recognition if was active');
+        setIsSpeaking(false);
+        
+        // Resume listening if it was active before
+        if (wasListening || wasInWakeWordMode) {
+          setTimeout(() => {
+            if (wasInWakeWordMode) {
+              startListening(true);
+            } else if (wasListening) {
+              startListening(false);
+            }
+          }, 500);
+        }
+      };
       
       synthRef.current.speak(utterance);
     }
@@ -696,6 +744,7 @@ const AIAvatar = () => {
   const toggleVoice = () => {
     if (isSpeaking) {
       synthRef.current?.cancel();
+      setIsSpeaking(false);
     }
     setVoiceEnabled(!voiceEnabled);
   };
