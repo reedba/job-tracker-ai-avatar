@@ -38,7 +38,7 @@ const AIAvatar = () => {
   // Inline chat state
   const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState([
-    { id: 'welcome', text: "Hi — I'm the AI assistant. Ask me anything about job search.", sender: 'bot', timestamp: new Date() }
+    { id: 'welcome', text: "Hi — I'm your AI Avatar (Phase 1: Echo Mode). Send me a message to test the connection!", sender: 'bot', timestamp: new Date() }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -187,11 +187,8 @@ const AIAvatar = () => {
   }, [sessionExpiresAt, params]);
 
   // Setup ActionCable subscription for inline chat.
-  // We only open a subscription when either:
-  //  - a logged-in auth token is present in localStorage, or
-  //  - a guest `sessionToken` exists (after Begin Interview is clicked).
-  // This prevents anonymous visitors from opening a long-lived websocket that
-  // could be abused to consume backend/OpenAI resources.
+  // Setup ActionCable subscription for Avatar chat.
+  // Phase 1: Basic echo channel for testing WebSocket plumbing
   useEffect(() => {
     const authToken = localStorage.getItem('token');
     const tokenToUse = sessionToken || authToken;
@@ -201,6 +198,8 @@ const AIAvatar = () => {
       return undefined;
     }
 
+    console.log('Setting up AvatarChannel subscription...');
+
     // Clean up any previous subscription
     if (subscriptionRef.current) {
       try { subscriptionRef.current.unsubscribe(); } catch (e) {}
@@ -209,11 +208,21 @@ const AIAvatar = () => {
 
     const consumer = getConsumer(tokenToUse);
     try {
-      subscriptionRef.current = consumer.subscriptions.create({ channel: 'ChatChannel' }, {
-        connected() { setIsConnected(true); },
-        disconnected() { setIsConnected(false); },
+      subscriptionRef.current = consumer.subscriptions.create({ channel: 'AvatarChannel' }, {
+        connected() { 
+          console.log('AvatarChannel connected');
+          setIsConnected(true); 
+        },
+        disconnected() { 
+          console.log('AvatarChannel disconnected');
+          setIsConnected(false); 
+        },
         received(data) {
-          if (data.type === 'message') {
+          console.log('AvatarChannel received:', data);
+          
+          if (data.type === 'connection') {
+            console.log('Connection confirmed:', data.message);
+          } else if (data.type === 'message') {
             setMessages(prev => [...prev, { id: Date.now(), text: data.text, sender: 'bot', timestamp: new Date(data.timestamp || Date.now()) }]);
             setIsLoading(false);
           } else if (data.type === 'status') {
@@ -225,7 +234,7 @@ const AIAvatar = () => {
         }
       });
     } catch (e) {
-      console.warn('Chat subscription failed', e);
+      console.warn('AvatarChannel subscription failed', e);
     }
 
     return () => {
