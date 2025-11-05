@@ -23,7 +23,7 @@ module ApplicationCable
         if decoded['session'] == true
           link_id = decoded['link_id']
           link = AvatarLink.find_by(id: link_id)
-          if link && link.active?
+          if link && link.valid_for_connection?
             # Set guest identifier and allow connection (current_user remains nil)
             self.current_guest_link_id = link.id
             return nil

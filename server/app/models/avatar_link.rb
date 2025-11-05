@@ -7,20 +7,25 @@ class AvatarLink < ApplicationRecord
 
   scope :active_links, -> { where(active: true).where("expires_at IS NULL OR expires_at > ?", Time.current) }
 
-  # Active means the link is marked active and has not passed its expiry time.
-  # We intentionally do NOT track or enforce a maximum number of uses here;
-  # session lifetime is governed by the short-lived session JWT issued at
-  # `start_session`. This keeps links usable by multiple visitors until the
-  # expires_at timestamp (if present) elapses.
+  # Active means the link is marked active, has not passed its expiry time,
+  # and has not been consumed by a session yet.
   def active?
+    active && (expires_at.nil? || expires_at > Time.current) && used_count == 0
+  end
+
+  # For ActionCable connections: allow consumed links that haven't expired
+  def valid_for_connection?
     active && (expires_at.nil? || expires_at > Time.current)
   end
 
-  # Historically we incremented a usage counter and disabled the link when
-  # max_uses was reached. That behavior has been removed; keep a no-op
-  # method for backward compatibility in case callers still call it.
-  def increment_use!
-    # no-op: usage counts are no longer enforced
-    true
+  # Mark this link as consumed after starting a session (but keep it active for connection)
+  def consume!
+    increment!(:used_count)
+    # Don't deactivate - let it stay active for ActionCable connection
+  end
+
+  # Check if link can start a new session (not consumed)
+  def can_start_session?
+    active? && used_count == 0
   end
 end

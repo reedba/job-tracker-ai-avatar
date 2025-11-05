@@ -38,7 +38,7 @@ const AIAvatar = () => {
   // Inline chat state
   const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState([
-    { id: 'welcome', text: "Hi — I'm your AI Avatar (Phase 1: Echo Mode). Send me a message to test the connection!", sender: 'bot', timestamp: new Date() }
+    { id: 'welcome', text: "Hi — I'm your AI Avatar (Phase 2: OpenAI Integration). Ask me anything about your job search!", sender: 'bot', timestamp: new Date() }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -82,9 +82,7 @@ const AIAvatar = () => {
 
     // No valid stored session; proceed to verify the link with the server.
     if (sessionToken) return; // session established elsewhere
-    setShowVerifyModal(true);
-    setLinkValid(null);
-
+    
     const verify = async () => {
       try {
         setLinkValid(null);
@@ -94,14 +92,18 @@ const AIAvatar = () => {
           setLinkData(res.data);
         } else {
           setLinkValid(false);
+          setLinkData(null);
         }
       } catch (e) {
         console.warn('verify failed', e);
         setLinkValid(false);
+        setLinkData(null);
       }
     };
 
+    // Always verify the link to check if it's still available
     verify();
+    setShowVerifyModal(true);
   }, [params, user, sessionToken]);
 
   const handleBeginInterview = async () => {
@@ -136,22 +138,32 @@ const AIAvatar = () => {
   // session and local state when the session JWT expires.
   useEffect(() => {
     if (!sessionExpiresAt || !params?.token) return;
+    // Only enforce guest session expiry UI for public (unauthenticated) visitors
+    if (user) return;
+    
     const expiresAtDate = new Date(sessionExpiresAt);
     const ms = expiresAtDate - new Date();
     if (ms <= 0) {
-      // already expired
+      // Session already expired - clear everything and don't allow restart
       try { sessionStorage.removeItem(`avatar_session:${params.token}`); } catch (e) {}
       setSessionToken(null);
       setSessionExpiresAt(null);
+      setLinkValid(false); // Mark link as invalid after session expires
+      setLinkData(null);
+      setShowVerifyModal(true); // Show modal with expired message
       return;
     }
     const t = setTimeout(() => {
+      // Session expired - clear everything and mark link as consumed
       try { sessionStorage.removeItem(`avatar_session:${params.token}`); } catch (e) {}
       setSessionToken(null);
       setSessionExpiresAt(null);
+      setLinkValid(false); // Mark link as invalid after session expires
+      setLinkData(null);
+      setShowVerifyModal(true); // Show modal with expired message
     }, ms);
     return () => clearTimeout(t);
-  }, [sessionExpiresAt, params]);
+  }, [sessionExpiresAt, params, user]);
 
   // Countdown display for active guest session
   useEffect(() => {
@@ -173,6 +185,12 @@ const AIAvatar = () => {
       const ms = new Date(sessionExpiresAt) - new Date();
       if (ms <= 0) {
         try { sessionStorage.removeItem(`avatar_session:${params.token}`); } catch (e) {}
+        // Session expired - link is now consumed and unusable
+        if (!user) {
+          setLinkValid(false);
+          setLinkData(null);
+          setShowVerifyModal(true);
+        }
         setSessionToken(null);
         setSessionExpiresAt(null);
         setRemaining(null);
@@ -356,7 +374,39 @@ const AIAvatar = () => {
               </List>
 
               <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                <TextField fullWidth size="small" placeholder={isConnected ? 'Ask the assistant...' : 'Connecting...'} value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyPress={handleKeyPress} disabled={!isConnected} multiline maxRows={3} />
+                <TextField 
+                  fullWidth 
+                  size="small" 
+                  placeholder={isConnected ? 'Ask the assistant...' : 'Connecting...'} 
+                  value={inputValue} 
+                  onChange={(e) => setInputValue(e.target.value)} 
+                  onKeyPress={handleKeyPress} 
+                  disabled={!isConnected} 
+                  multiline 
+                  maxRows={3}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: 'white',
+                      '& fieldset': {
+                        borderColor: 'grey.400',
+                        borderWidth: '1px'
+                      },
+                      '&:hover fieldset': {
+                        borderColor: 'primary.main'
+                      },
+                      '&.Mui-focused fieldset': {
+                        borderColor: 'primary.main',
+                        borderWidth: '2px'
+                      },
+                      '& input': {
+                        color: '#1a237e'
+                      },
+                      '& textarea': {
+                        color: '#1a237e'
+                      }
+                    }
+                  }}
+                />
                 <IconButton color="primary" onClick={handleSendMessage} disabled={!inputValue.trim() || !isConnected}><SendIcon /></IconButton>
               </Box>
             </Paper>
@@ -380,14 +430,17 @@ const AIAvatar = () => {
           )}
 
           {linkValid === false && (
-            <Typography color="error">This interview link is invalid, expired, or has already been used.</Typography>
+            <Typography color="error">
+              This interview link is invalid, expired, or has already been used. 
+              Please request a new link to start another interview session.
+            </Typography>
           )}
 
           {linkValid === true && linkData && (
             <Box sx={{ minWidth: 320 }}>
               <Typography variant="subtitle1">{linkData.name || 'Interview Session'}</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                This will start a 1-hour interview session for this AI avatar. You will be connected as a guest.
+                This will start a 2-minute interview session for this AI avatar. You will be connected as a guest.
               </Typography>
               {linkData.expires_at && (
                 <Typography variant="caption" sx={{ display: 'block', mt: 1 }}>

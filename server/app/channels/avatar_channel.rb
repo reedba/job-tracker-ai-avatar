@@ -15,11 +15,21 @@ class AvatarChannel < ApplicationCable::Channel
 
     stream_from stream_name
     
+    # Initialize the chat service for this connection
+    user_or_guest = current_user || current_guest_link_id
+    @avatar_service = AvatarChatService.new(user_or_guest, self)
+    
     # Send connection confirmation
+    welcome_message = if current_user
+      "Welcome to your AI Avatar, #{current_user.full_name}. I'm here to help with your job search and career development."
+    else
+      "Welcome to your AI Avatar interview session. I'm here to conduct a professional interview and learn about your background."
+    end
+    
     transmit({
       type: 'connection',
       status: 'connected',
-      message: 'Connected to AI Avatar',
+      message: welcome_message,
       user_type: current_user ? 'authenticated' : 'guest',
       timestamp: Time.current.iso8601
     })
@@ -36,20 +46,16 @@ class AvatarChannel < ApplicationCable::Channel
     message = data['message']
     return unless message.present?
 
-    # Get the stream name (same logic as subscribed)
-    stream_name = if current_user
-      "avatar_#{current_user.id}"
-    elsif current_guest_link_id
-      "avatar_guest_#{current_guest_link_id}"
-    else
-      return
-    end
+    # Process the message using the Avatar chat service (Phase 2: OpenAI integration)
+    @avatar_service.process_message(message)
+  end
 
-    # Echo the message back with a simple response for testing
-    ActionCable.server.broadcast(stream_name, {
-      type: 'message',
-      text: "Echo: #{message}",
-      sender: 'bot',
+  # Get conversation summary
+  def get_conversation_summary(data)
+    summary = @avatar_service.conversation_summary
+    transmit({
+      type: 'conversation_summary',
+      summary: summary,
       timestamp: Time.current.iso8601
     })
   end

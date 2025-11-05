@@ -46,19 +46,19 @@ class AvatarLinksController < ApplicationController
   end
 
   # POST /api/avatar_links/:id/start_session
-  # Issues a short-lived session JWT (1 hour) that can be used to connect to ActionCable
+  # Issues a short-lived session JWT (2 minutes) that can be used to connect to ActionCable
+  # This consumes the link, making it single-use
   def start_session
     link = AvatarLink.find_by(id: params[:id])
-    if link.nil? || !link.active?
-      return render json: { error: 'Link not active or not found' }, status: :forbidden
+    if link.nil? || !link.can_start_session?
+      return render json: { error: 'Link not available, expired, or already used' }, status: :forbidden
     end
 
-    # We no longer track per-link usage counts. Session lifetime is enforced
-    # by the short-lived JWT issued below; keep the link active until its
-    # expires_at timestamp elapses (or an admin deactivates it).
+    # Consume the link (mark as used and deactivate)
+    link.consume!
 
-    # Build a short-lived session token (1 hour)
-    exp = 1.hour.from_now.to_i
+    # Build a short-lived session token (2 minutes for testing)
+    exp = 2.minutes.from_now.to_i
     payload = { session: true, link_id: link.id, exp: exp }
     session_token = JWT.encode(payload, JsonWebToken::SECRET_KEY, JsonWebToken::ALGORITHM)
 
