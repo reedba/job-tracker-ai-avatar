@@ -16,6 +16,22 @@ import { createAvatarLink } from '../../features/avatarLinks/avatarLinksSlice';
 import PersonIcon from '@mui/icons-material/Person';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 
+// Add pulse animation styles
+const pulseAnimation = `
+  @keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+  }
+`;
+
+// Inject styles into head
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = pulseAnimation;
+  document.head.appendChild(styleSheet);
+}
+
 const AIAvatar = () => {
   const navigate = useNavigate();
 
@@ -61,6 +77,12 @@ const AIAvatar = () => {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingTimeoutRef = useRef(null);
+  
+  // Seamless conversation state
+  const [conversationMode, setConversationMode] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentActivity, setCurrentActivity] = useState('idle'); // 'idle', 'listening', 'processing', 'thinking', 'speaking'
+  const [autoResumeListening, setAutoResumeListening] = useState(false);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
@@ -334,17 +356,34 @@ const AIAvatar = () => {
               const newMessage = { id: Date.now(), text: data.text, sender: 'bot', timestamp: new Date(data.timestamp || Date.now()) };
               setMessages(prev => [...prev, newMessage]);
               setIsLoading(false);
+              setCurrentActivity('speaking');
+              setIsProcessing(false);
               
               // Speak the AI response if voice is enabled
               if (voiceEnabled && data.text) {
                 speakText(data.text);
+              } else {
+                // If voice is disabled, still update activity state
+                setCurrentActivity('idle');
+                // Auto-resume listening in conversation mode
+                if (conversationMode) {
+                  setTimeout(() => {
+                    console.log('🔄 Auto-resuming listening after AI response (voice disabled)');
+                    startWhisperRecording();
+                  }, 1500);
+                }
               }
             } else if (data.type === 'status') {
               setIsLoading(data.status === 'typing');
+              if (data.status === 'typing') {
+                setCurrentActivity('thinking');
+              }
             } else if (data.type === 'error') {
               const errorMessage = { id: Date.now(), text: data.message, sender: 'bot', timestamp: new Date() };
               setMessages(prev => [...prev, errorMessage]);
               setIsLoading(false);
+              setCurrentActivity('idle');
+              setIsProcessing(false);
               
               // Speak error messages too if voice is enabled
               if (voiceEnabled && data.message) {
@@ -393,12 +432,16 @@ const AIAvatar = () => {
     const userMessage = { id: Date.now(), text: messageText, sender: 'user', timestamp: new Date() };
     setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
+    setCurrentActivity('thinking');
+    setIsProcessing(true);
     
     try {
       subscriptionRef.current.send({ message: messageText });
     } catch (e) {
       console.error('Failed to send message:', e);
       setIsLoading(false);
+      setCurrentActivity('idle');
+      setIsProcessing(false);
       // Add error message to chat
       const errorMessage = { 
         id: Date.now() + 1, 
@@ -526,6 +569,7 @@ const AIAvatar = () => {
       mediaRecorderRef.current.start();
       setIsRecording(true);
       setIsListening(true);
+      setCurrentActivity('listening');
       
       console.log('🟢 Recording started successfully');
       
@@ -566,6 +610,7 @@ const AIAvatar = () => {
     
     setIsRecording(false);
     setIsListening(false);
+    setCurrentActivity('processing');
   };
   
   const processWithWhisper = async (audioBlob) => {
@@ -774,16 +819,16 @@ const AIAvatar = () => {
     };
     
     utterance.onend = () => {
-      console.log('✅ TTS ended successfully - resuming speech recognition if was active');
+      console.log('✅ TTS ended successfully');
       setIsSpeaking(false);
+      setCurrentActivity('idle');
       
-      // Resume listening if it was active before
-      if (wasListening) {
-        console.log('Resuming speech recognition after TTS completion');
+      // Auto-resume listening in conversation mode
+      if (conversationMode) {
+        console.log('🔄 Auto-resuming listening after AI response');
         setTimeout(() => {
-          // Don't auto-restart recording after TTS - user can manually start
-          console.log('TTS ended, ready for new recording');
-        }, 750);
+          startWhisperRecording();
+        }, 1000); // Wait 1 second before auto-resuming
       }
     };
     
@@ -794,13 +839,14 @@ const AIAvatar = () => {
         type: event.type
       });
       setIsSpeaking(false);
+      setCurrentActivity('idle');
       
-      // Resume listening if it was active before
-      if (wasListening) {
-        console.log('Resuming speech recognition after TTS error');
+      // Auto-resume listening in conversation mode even after error
+      if (conversationMode) {
+        console.log('🔄 Auto-resuming listening after TTS error');
         setTimeout(() => {
-          console.log('TTS error handled, ready for new recording');
-        }, 500);
+          startWhisperRecording();
+        }, 1000);
       }
     };
     
@@ -1076,6 +1122,105 @@ const AIAvatar = () => {
               </Box>
 
               {/* Speech Controls */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2 }}>
+                {/* Conversation Mode Toggle */}
+                <Button
+                  variant={conversationMode ? 'contained' : 'outlined'}
+                  size="small"
+                  onClick={() => {
+                    setConversationMode(!conversationMode);
+                    if (!conversationMode) {
+                      // Starting conversation mode - auto-start listening
+                      console.log('🔄 Starting conversation mode');
+                      setTimeout(() => startWhisperRecording(), 500);
+                    } else {
+                      // Stopping conversation mode - stop any recording
+                      console.log('⏹️ Stopping conversation mode');
+                      if (isRecording) stopWhisperRecording();
+                    }
+                  }}
+                  disabled={!isConnected}
+                  sx={{ 
+                    backgroundColor: conversationMode ? '#4caf50' : 'transparent',
+                    color: conversationMode ? 'white' : '#4caf50',
+                    borderColor: '#4caf50',
+                    '&:hover': {
+                      backgroundColor: conversationMode ? '#45a049' : '#e8f5e8'
+                    }
+                  }}
+                >
+                  {conversationMode ? '🎯 Conversation On' : '💬 Start Conversation'}
+                </Button>
+              </Box>
+
+              {/* Activity Indicator */}
+              {conversationMode && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 1, 
+                    px: 2, 
+                    py: 1, 
+                    borderRadius: 2, 
+                    backgroundColor: 
+                      currentActivity === 'listening' ? '#e3f2fd' :
+                      currentActivity === 'processing' ? '#fff3e0' :
+                      currentActivity === 'thinking' ? '#f3e5f5' :
+                      currentActivity === 'speaking' ? '#e8f5e8' :
+                      '#f5f5f5',
+                    border: '1px solid',
+                    borderColor:
+                      currentActivity === 'listening' ? '#2196f3' :
+                      currentActivity === 'processing' ? '#ff9800' :
+                      currentActivity === 'thinking' ? '#9c27b0' :
+                      currentActivity === 'speaking' ? '#4caf50' :
+                      '#e0e0e0'
+                  }}>
+                    {currentActivity === 'listening' && (
+                      <>
+                        <MicIcon sx={{ color: '#2196f3', animation: 'pulse 1.5s infinite' }} />
+                        <Typography variant="body2" sx={{ color: '#2196f3', fontWeight: 'bold' }}>
+                          🎧 Listening...
+                        </Typography>
+                      </>
+                    )}
+                    {currentActivity === 'processing' && (
+                      <>
+                        <CircularProgress size={16} sx={{ color: '#ff9800' }} />
+                        <Typography variant="body2" sx={{ color: '#ff9800', fontWeight: 'bold' }}>
+                          🔄 Processing speech...
+                        </Typography>
+                      </>
+                    )}
+                    {currentActivity === 'thinking' && (
+                      <>
+                        <CircularProgress size={16} sx={{ color: '#9c27b0' }} />
+                        <Typography variant="body2" sx={{ color: '#9c27b0', fontWeight: 'bold' }}>
+                          🤔 AI thinking...
+                        </Typography>
+                      </>
+                    )}
+                    {currentActivity === 'speaking' && (
+                      <>
+                        <VolumeUpIcon sx={{ color: '#4caf50', animation: 'pulse 1.5s infinite' }} />
+                        <Typography variant="body2" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
+                          🗣️ AI speaking...
+                        </Typography>
+                      </>
+                    )}
+                    {currentActivity === 'idle' && conversationMode && (
+                      <>
+                        <Typography variant="body2" sx={{ color: '#757575' }}>
+                          💭 Ready for conversation
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Manual Speech Controls */}
               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2 }}>
                 {/* Microphone Button for Whisper Recording */}
                 <Fab
