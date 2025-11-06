@@ -475,6 +475,12 @@ const AIAvatar = () => {
   // Whisper Speech Recognition Functions
   const startWhisperRecording = async () => {
     try {
+      // Prevent recording if AI is currently speaking to avoid feedback loop
+      if (isSpeaking) {
+        console.log('🔇 Cannot start recording - AI is currently speaking');
+        return;
+      }
+      
       console.log('🎤 Starting Whisper recording...');
       
       // Check if getUserMedia is supported
@@ -700,6 +706,12 @@ const AIAvatar = () => {
   };
 
   const toggleListening = () => {
+    // Prevent toggling if AI is currently speaking
+    if (isSpeaking) {
+      console.log('🔇 Cannot toggle recording - AI is currently speaking');
+      return;
+    }
+    
     if (isListening || isRecording) {
       stopWhisperRecording();
     } else {
@@ -755,6 +767,10 @@ const AIAvatar = () => {
       console.log('Pausing speech recognition during TTS to prevent feedback loop');
       stopWhisperRecording();
     }
+    
+    // Immediately set speaking state to prevent any new recording attempts
+    setIsSpeaking(true);
+    setCurrentActivity('speaking');
     
     // Clean the text
     const cleanText = text.trim();
@@ -823,12 +839,17 @@ const AIAvatar = () => {
       setIsSpeaking(false);
       setCurrentActivity('idle');
       
-      // Auto-resume listening in conversation mode
+      // Auto-resume listening in conversation mode with additional safety checks
       if (conversationMode) {
         console.log('🔄 Auto-resuming listening after AI response');
         setTimeout(() => {
-          startWhisperRecording();
-        }, 1000); // Wait 1 second before auto-resuming
+          // Double-check that we're not still speaking and conversation mode is still active
+          if (!synthRef.current?.speaking && !isSpeaking && conversationMode) {
+            startWhisperRecording();
+          } else {
+            console.log('🔇 Skipping auto-resume: speech still active or conversation mode disabled');
+          }
+        }, 1500); // Increased delay to ensure speech is completely finished
       }
     };
     
@@ -845,8 +866,13 @@ const AIAvatar = () => {
       if (conversationMode) {
         console.log('🔄 Auto-resuming listening after TTS error');
         setTimeout(() => {
-          startWhisperRecording();
-        }, 1000);
+          // Double-check that we're not still speaking and conversation mode is still active
+          if (!synthRef.current?.speaking && !isSpeaking && conversationMode) {
+            startWhisperRecording();
+          } else {
+            console.log('🔇 Skipping auto-resume after error: speech still active or conversation mode disabled');
+          }
+        }, 1500); // Increased delay for safety
       }
     };
     
@@ -1226,7 +1252,7 @@ const AIAvatar = () => {
                 <Fab
                   color={isListening || isRecording ? 'secondary' : 'primary'}
                   onClick={toggleListening}
-                  disabled={!isConnected}
+                  disabled={!isConnected || isSpeaking}
                   size="small"
                   sx={{ 
                     backgroundColor: (isListening || isRecording) ? '#9c27b0' : '#2196f3',
