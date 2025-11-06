@@ -48,6 +48,12 @@ gem 'active_model_serializers'
 gem 'faraday'
 gem 'faraday-retry'
 
+# WebSocket support for Realtime API
+gem 'eventmachine'
+
+# WebSocket client for OpenAI Realtime API
+gem 'faye-websocket'
+
 # LangChain for LLM orchestration and HuggingFace integration
 gem 'langchainrb', '~> 0.17'
 gem 'ruby-openai', '~> 7.0'  # Used by langchainrb

@@ -59,7 +59,7 @@ const AIAvatar = () => {
   // Inline chat state
   const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState([
-    { id: 'welcome', text: "Hi — I'm your AI Avatar with Whisper speech recognition. Ask me anything about your job search!", sender: 'bot', timestamp: new Date() }
+    { id: 'welcome', text: "Hi — I'm your AI Career Coach with real-time voice conversation powered by OpenAI's Realtime API. Experience ultra-low latency conversations - just start talking!", sender: 'bot', timestamp: new Date() }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -67,90 +67,77 @@ const AIAvatar = () => {
   const subscriptionRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Speech recognition state (Whisper only)
+  // Realtime API state
+  const [isRecording, setIsRecording] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [conversationMode, setConversationMode] = useState(false);
+  const [currentActivity, setCurrentActivity] = useState('idle');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [isRecording, setIsRecording] = useState(false);
-  const synthRef = useRef(null);
+  const [autoResumeListening, setAutoResumeListening] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Audio handling for Realtime API
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const recordingTimeoutRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const audioQueueRef = useRef([]);
+  const isPlayingAudioRef = useRef(false);
+  const synthRef = useRef(null);
+  const audioBufferRef = useRef([]);
+  const audioBufferTimeRef = useRef(0);
+  const nextAudioStartTimeRef = useRef(0);
+  const currentMessageRef = useRef(null);
+  const currentMessageIdRef = useRef(null);
   
-  // Seamless conversation state
-  const [conversationMode, setConversationMode] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [currentActivity, setCurrentActivity] = useState('idle'); // 'idle', 'listening', 'processing', 'thinking', 'speaking'
-  const [autoResumeListening, setAutoResumeListening] = useState(false);
-
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // State refs for legacy TTS functions
+  const isSpeakingRef = useRef(false);
+  const isListeningRef = useRef(false);
+  const isRecordingRef = useRef(false);
+  const conversationModeRef = useRef(false);  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
-  // Initialize speech synthesis only
+  // Debug state changes
   useEffect(() => {
-    // Initialize speech synthesis with enhanced voice loading
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      synthRef.current = window.speechSynthesis;
-      
-      // Enhanced voice loading with retry mechanism
-      let voiceLoadAttempts = 0;
-      const maxVoiceLoadAttempts = 5;
-      
-      const loadVoices = () => {
-        const voices = synthRef.current.getVoices();
-        voiceLoadAttempts++;
-        console.log(`Voice loading attempt ${voiceLoadAttempts}: ${voices.length} voices found`);
-        
-        if (voices.length > 0) {
-          console.log('✅ Speech synthesis voices loaded successfully:', voices.length);
-          voices.forEach((voice, index) => {
-            if (index < 5) { // Log first 5 voices for debugging
-              console.log(`  Voice ${index}: ${voice.name} (${voice.lang}) - ${voice.localService ? 'local' : 'remote'}`);
-            }
-          });
-        } else if (voiceLoadAttempts < maxVoiceLoadAttempts) {
-          console.log('No voices loaded yet, retrying in 500ms...');
-          setTimeout(loadVoices, 500);
-        } else {
-          console.warn('⚠️ Failed to load voices after maximum attempts');
-        }
-      };
-      
-      // Load voices immediately if available
-      loadVoices();
-      
-      // Also load voices when they become available (some browsers need this)
-      if (synthRef.current.onvoiceschanged !== undefined) {
-        synthRef.current.onvoiceschanged = () => {
-          console.log('Voices changed event triggered');
-          loadVoices();
-        };
+    console.log('🔍 STATE CHANGE:', {
+      isListening,
+      isSpeaking,
+      isRecording,
+      conversationMode,
+      currentActivity,
+      autoResumeListening,
+      isProcessing,
+      isConnected,
+      synthSpeaking: synthRef.current?.speaking || false
+    });
+  }, [isListening, isSpeaking, isRecording, conversationMode, currentActivity, autoResumeListening, isProcessing, isConnected]);
+
+  // Sync state with refs for legacy TTS functions
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+    isListeningRef.current = isListening;
+    isRecordingRef.current = isRecording;
+    conversationModeRef.current = conversationMode;
+  }, [isSpeaking, isListening, isRecording, conversationMode]);
+
+  // Initialize audio context for Realtime API
+  useEffect(() => {
+    const initAudio = async () => {
+      try {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 24000
+        });
+        console.log('✅ Audio context initialized for Realtime API');
+      } catch (error) {
+        console.error('❌ Failed to initialize audio context:', error);
       }
-      
-      // Force voice loading on some browsers
-      setTimeout(() => {
-        if (synthRef.current.getVoices().length === 0) {
-          console.log('Forcing voice loading by speaking empty utterance...');
-          const dummyUtterance = new SpeechSynthesisUtterance('');
-          dummyUtterance.volume = 0;
-          try {
-            synthRef.current.speak(dummyUtterance);
-          } catch (e) {
-            console.warn('Error with dummy utterance:', e);
-          }
-        }
-      }, 1000);
-    } else {
-      console.warn('Speech synthesis not supported in this browser');
-    }
+    };
+
+    initAudio();
 
     return () => {
-      if (synthRef.current) {
-        synthRef.current.cancel();
-      }
-      if (recordingTimeoutRef.current) {
-        clearTimeout(recordingTimeoutRef.current);
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
     };
   }, []);
@@ -348,51 +335,11 @@ const AIAvatar = () => {
             setIsConnected(false); 
           },
           received(data) {
-            console.log('AvatarChannel received:', data);
-            
-            if (data.type === 'connection') {
-              console.log('Connection confirmed:', data.message);
-            } else if (data.type === 'message') {
-              const newMessage = { id: Date.now(), text: data.text, sender: 'bot', timestamp: new Date(data.timestamp || Date.now()) };
-              setMessages(prev => [...prev, newMessage]);
-              setIsLoading(false);
-              setCurrentActivity('speaking');
-              setIsProcessing(false);
-              
-              // Speak the AI response if voice is enabled
-              if (voiceEnabled && data.text) {
-                speakText(data.text);
-              } else {
-                // If voice is disabled, still update activity state
-                setCurrentActivity('idle');
-                // Auto-resume listening in conversation mode
-                if (conversationMode) {
-                  setTimeout(() => {
-                    console.log('🔄 Auto-resuming listening after AI response (voice disabled)');
-                    startWhisperRecording();
-                  }, 1500);
-                }
-              }
-            } else if (data.type === 'status') {
-              setIsLoading(data.status === 'typing');
-              if (data.status === 'typing') {
-                setCurrentActivity('thinking');
-              }
-            } else if (data.type === 'error') {
-              const errorMessage = { id: Date.now(), text: data.message, sender: 'bot', timestamp: new Date() };
-              setMessages(prev => [...prev, errorMessage]);
-              setIsLoading(false);
-              setCurrentActivity('idle');
-              setIsProcessing(false);
-              
-              // Speak error messages too if voice is enabled
-              if (voiceEnabled && data.message) {
-                speakText(data.message);
-              }
-            }
+            console.log('📥 Realtime message:', data.type, data);
+            handleRealtimeMessage(data);
           }
         });
-        console.log('New subscription created');
+        console.log('New Realtime subscription created');
       } catch (e) {
         console.warn('AvatarChannel subscription failed', e);
         setIsConnected(false);
@@ -413,53 +360,7 @@ const AIAvatar = () => {
     };
   }, [sessionToken, user, voiceEnabled]); // Added voiceEnabled to dependencies
 
-  const handleSendMessage = (speechText = null) => {
-    const messageText = speechText || inputValue.trim();
-    if (!messageText || isLoading || !isConnected) {
-      console.warn('Cannot send message:', { messageText, isLoading, isConnected });
-      return;
-    }
-    
-    // Check if subscription is still valid
-    if (!subscriptionRef.current) {
-      console.warn('No active subscription available');
-      setIsConnected(false);
-      return;
-    }
-    
-    console.log('Sending message:', messageText);
-    
-    const userMessage = { id: Date.now(), text: messageText, sender: 'user', timestamp: new Date() };
-    setMessages(prev => [...prev, userMessage]);
-    setIsLoading(true);
-    setCurrentActivity('thinking');
-    setIsProcessing(true);
-    
-    try {
-      subscriptionRef.current.send({ message: messageText });
-    } catch (e) {
-      console.error('Failed to send message:', e);
-      setIsLoading(false);
-      setCurrentActivity('idle');
-      setIsProcessing(false);
-      // Add error message to chat
-      const errorMessage = { 
-        id: Date.now() + 1, 
-        text: 'Failed to send message. Please check your connection.', 
-        sender: 'bot', 
-        timestamp: new Date() 
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    }
-    
-    // Always clear input after sending
-    setInputValue('');
-    
-    // Stop recording when sending message
-    if (isRecording) {
-      stopWhisperRecording();
-    }
-  };
+
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { 
@@ -472,7 +373,675 @@ const AIAvatar = () => {
     handleSendMessage();
   };
 
-  // Whisper Speech Recognition Functions
+  // Realtime API Message Handler
+  const handleRealtimeMessage = (data) => {
+    switch (data.type) {
+      case 'connection':
+        console.log('🔗 Realtime connection confirmed:', data.message);
+        setCurrentActivity('idle');
+        break;
+
+      case 'realtime_connected':
+        console.log('✅ OpenAI Realtime API connected');
+        break;
+
+      case 'speech_started':
+        console.log('🎤 User speech started');
+        setCurrentActivity('listening');
+        setIsListening(true);
+        break;
+
+      case 'speech_stopped':
+        console.log('⏹️ User speech stopped, processing...');
+        setCurrentActivity('processing');
+        setIsListening(false);
+        break;
+
+      case 'user_transcript':
+        console.log('📝 User transcript:', data.text);
+        const userMessage = { 
+          id: Date.now(), 
+          text: data.text, 
+          sender: 'user', 
+          timestamp: new Date(data.timestamp || Date.now()) 
+        };
+        setMessages(prev => [...prev, userMessage]);
+        setCurrentActivity('thinking');
+        break;
+
+      case 'audio_delta':
+        // Stream audio response from OpenAI
+        console.log('🔊 Audio delta received');
+        if (voiceEnabled) {
+          playAudioDelta(data.audio);
+        }
+        setCurrentActivity('speaking');
+        setIsSpeaking(true);
+        
+        // Initialize audio timing if this is the first chunk
+        if (nextAudioStartTimeRef.current === 0) {
+          nextAudioStartTimeRef.current = audioContextRef.current?.currentTime || 0;
+          // Clear any pending text streaming
+          currentMessageRef.current = null;
+          currentMessageIdRef.current = null;
+        }
+        break;
+
+      case 'audio_complete':
+        console.log('✅ Audio response complete');
+        setIsSpeaking(false);
+        setCurrentActivity('idle');
+        
+        // Reset audio processing state
+        nextAudioStartTimeRef.current = 0;
+        audioQueueRef.current = [];
+        isPlayingAudioRef.current = false;
+        
+        // Auto-resume conversation if in conversation mode
+        if (conversationModeRef.current) {
+          setTimeout(() => {
+            if (conversationModeRef.current && !isSpeakingRef.current && !isRecordingRef.current) {
+              console.log('🔄 Auto-resuming conversation mode after audio...');
+              startRecording();
+            }
+          }, 1000);
+        }
+        break;
+
+      case 'text_delta':
+        // Handle streaming text - accumulate text as it comes in
+        console.log('📝 Text delta:', data.text);
+        
+        if (!currentMessageIdRef.current) {
+          // Start a new message
+          const messageId = Date.now();
+          currentMessageIdRef.current = messageId;
+          currentMessageRef.current = data.text || '';
+          
+          const newMessage = { 
+            id: messageId, 
+            text: currentMessageRef.current, 
+            sender: 'bot', 
+            timestamp: new Date(),
+            isStreaming: true
+          };
+          setMessages(prev => [...prev, newMessage]);
+        } else {
+          // Update existing message
+          currentMessageRef.current += data.text || '';
+          setMessages(prev => prev.map(msg => 
+            msg.id === currentMessageIdRef.current 
+              ? { ...msg, text: currentMessageRef.current }
+              : msg
+          ));
+        }
+        break;
+
+      case 'ai_response':
+        console.log('💬 AI response:', data.text);
+        
+        if (currentMessageIdRef.current) {
+          // Finalize the streaming message
+          setMessages(prev => prev.map(msg => 
+            msg.id === currentMessageIdRef.current 
+              ? { ...msg, text: data.text, isStreaming: false }
+              : msg
+          ));
+        } else {
+          // Create a new complete message
+          const aiMessage = { 
+            id: Date.now(), 
+            text: data.text, 
+            sender: 'bot', 
+            timestamp: new Date(data.timestamp || Date.now()) 
+          };
+          setMessages(prev => [...prev, aiMessage]);
+        }
+        
+        // Reset streaming state
+        currentMessageRef.current = null;
+        currentMessageIdRef.current = null;
+        setIsLoading(false);
+        break;
+
+      case 'function_call_result':
+        console.log('🛠️ Function called:', data.function, data.result);
+        const toolMessage = { 
+          id: Date.now(), 
+          text: `🔧 Used ${data.function} tool`, 
+          sender: 'system', 
+          timestamp: new Date(data.timestamp || Date.now()),
+          isToolCall: true
+        };
+        setMessages(prev => [...prev, toolMessage]);
+        break;
+
+      case 'response_complete':
+        console.log('✅ Complete response finished');
+        setCurrentActivity('idle');
+        setIsLoading(false);
+        setIsSpeaking(false);
+        
+        // Auto-resume conversation if in conversation mode
+        if (conversationModeRef.current) {
+          setTimeout(() => {
+            if (conversationModeRef.current && !isSpeakingRef.current && !isRecordingRef.current) {
+              console.log('🔄 Auto-resuming conversation mode...');
+              startRecording();
+            }
+          }, 1000);
+        }
+        break;
+
+      case 'error':
+        console.error('❌ Realtime error:', data.message);
+        const errorMessage = { 
+          id: Date.now(), 
+          text: `Error: ${data.message}`, 
+          sender: 'bot', 
+          timestamp: new Date() 
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        setCurrentActivity('idle');
+        setIsLoading(false);
+        break;
+    }
+  };
+
+  // Helper function to ensure audio context is ready
+  const ensureAudioContextReady = async () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: 24000
+      });
+    }
+    
+    if (audioContextRef.current.state === 'suspended') {
+      try {
+        await audioContextRef.current.resume();
+        console.log('🔊 Audio context resumed');
+      } catch (error) {
+        console.warn('Failed to resume audio context:', error);
+      }
+    }
+  };
+
+  // Audio playbook for streaming audio from Realtime API with proper sequencing
+  const playAudioDelta = async (audioData) => {
+    try {
+      await ensureAudioContextReady();
+      if (!audioContextRef.current || !voiceEnabled) {
+        console.log('🚫 Skipping audio playback:', !audioContextRef.current ? 'No AudioContext' : 'Voice disabled');
+        return;
+      }
+
+      // Add to queue and process
+      audioQueueRef.current.push(audioData);
+      processAudioQueue();
+
+    } catch (error) {
+      console.error('❌ Error in playAudioDelta:', error);
+    }
+  };
+
+  // Process audio queue sequentially
+  const processAudioQueue = async () => {
+    if (isPlayingAudioRef.current || audioQueueRef.current.length === 0) {
+      return;
+    }
+
+    isPlayingAudioRef.current = true;
+    
+    while (audioQueueRef.current.length > 0) {
+      const audioData = audioQueueRef.current.shift();
+      await playAudioChunk(audioData);
+    }
+    
+    isPlayingAudioRef.current = false;
+  };
+
+  // Play a single audio chunk
+  const playAudioChunk = async (audioData) => {
+    return new Promise((resolve) => {
+      try {
+        console.log(`🎵 Processing audio chunk: ${audioData.length} chars`);
+
+        // Decode base64 PCM16 audio data
+        let binaryString;
+        try {
+          binaryString = atob(audioData);
+        } catch (error) {
+          console.error('❌ Base64 decode failed:', error);
+          resolve();
+          return;
+        }
+
+        // Ensure even number of bytes
+        if (binaryString.length % 2 !== 0) {
+          binaryString += '\0';
+        }
+
+        const pcm16Data = new Int16Array(binaryString.length / 2);
+        
+        // Convert to PCM16
+        for (let i = 0; i < pcm16Data.length; i++) {
+          const byte1 = binaryString.charCodeAt(i * 2) & 0xFF;
+          const byte2 = binaryString.charCodeAt(i * 2 + 1) & 0xFF;
+          pcm16Data[i] = (byte2 << 8) | byte1;
+        }
+
+        // Create audio buffer
+        const audioBuffer = audioContextRef.current.createBuffer(1, pcm16Data.length, 24000);
+        const channelData = audioBuffer.getChannelData(0);
+        
+        // Convert to Float32
+        for (let i = 0; i < pcm16Data.length; i++) {
+          channelData[i] = pcm16Data[i] / 32768.0;
+        }
+
+        // Play immediately and wait for completion
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContextRef.current.destination);
+        
+        source.onended = () => {
+          console.log(`✅ Audio chunk finished: ${audioBuffer.duration.toFixed(3)}s`);
+          resolve();
+        };
+        
+        source.start();
+        console.log(`🔊 Playing audio chunk: ${audioBuffer.duration.toFixed(3)}s`);
+
+      } catch (error) {
+        console.error('❌ Error playing audio chunk:', error);
+        resolve();
+      }
+    });
+  };
+
+  // Start recording for Realtime API using Web Audio API for PCM16 format
+  const startRecording = async () => {
+    try {
+      if (isRecording || isSpeaking) {
+        console.log('🔇 Cannot start recording - already recording or AI speaking');
+        return;
+      }
+
+      console.log('🎤 Starting Realtime recording...');
+
+      // Request microphone access with explicit permissions check
+      console.log('🔍 Requesting microphone access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 24000
+        } 
+      });
+
+      console.log('✅ Microphone access granted, stream tracks:', stream.getTracks().length);
+
+      // Initialize Web Audio API for raw audio processing
+      if (!audioContextRef.current) {
+        console.log('🔧 Creating new AudioContext...');
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 24000
+        });
+      }
+
+      console.log('🎵 AudioContext state:', audioContextRef.current.state);
+      
+      if (audioContextRef.current.state === 'suspended') {
+        console.log('▶️ Resuming suspended AudioContext...');
+        await audioContextRef.current.resume();
+      }
+
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+
+      console.log('🔗 Setting up audio processing chain...');
+
+      processor.onaudioprocess = (event) => {
+        if (!isRecordingRef.current) {
+          console.log('⏸️ Audio processing stopped - isRecordingRef is false');
+          return;
+        }
+
+        const inputBuffer = event.inputBuffer;
+        const inputData = inputBuffer.getChannelData(0);
+        
+        // Debug: Check if we're getting audio input (every 10th frame to avoid spam)
+        const audioLevel = Math.max(...inputData.map(Math.abs));
+        if (Math.random() < 0.1) { // Log 10% of the time
+          console.log(`🎤 Audio processing - level: ${audioLevel.toFixed(4)}, recording: ${isRecordingRef.current}`);
+        }
+        
+        if (audioLevel > 0.01) {
+          console.log(`🔊 VOICE DETECTED! Level: ${audioLevel.toFixed(3)}`);
+        }
+        
+        // Convert float32 to int16 (PCM16)
+        const pcm16 = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const sample = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        }
+
+        // Add to buffer
+        audioBufferRef.current.push(pcm16);
+        audioBufferTimeRef.current += (inputData.length / 24000) * 1000; // Add milliseconds
+
+        // Send audio chunks periodically (every ~100ms worth of audio)
+        if (audioBufferTimeRef.current >= 100) {
+          // Combine all buffered audio
+          const totalLength = audioBufferRef.current.reduce((sum, arr) => sum + arr.length, 0);
+          const combinedAudio = new Int16Array(totalLength);
+          let offset = 0;
+          
+          for (const chunk of audioBufferRef.current) {
+            combinedAudio.set(chunk, offset);
+            offset += chunk.length;
+          }
+
+          // Convert to base64 and send
+          const uint8Array = new Uint8Array(combinedAudio.buffer);
+          const base64Audio = btoa(String.fromCharCode(...uint8Array));
+          
+          console.log(`📤 Sending audio chunk: ${audioBufferTimeRef.current.toFixed(2)}ms, ${combinedAudio.length} samples`);
+          
+          // Send audio chunk to OpenAI
+          sendAudioChunk(base64Audio);
+          
+          // Reset buffer
+          audioBufferRef.current = [];
+          audioBufferTimeRef.current = 0;
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(audioContextRef.current.destination);
+
+      // Store references for cleanup
+      mediaRecorderRef.current = { source, processor, stream };
+
+      console.log('🔴 Realtime recording started');
+      setIsRecording(true);
+      setIsListening(true);
+      setCurrentActivity('listening');
+      
+      // Debug: Verify refs are updated
+      setTimeout(() => {
+        console.log(`📊 Recording state - isRecording: ${isRecording}, isRecordingRef: ${isRecordingRef.current}`);
+        console.log('🎵 AudioContext state after setup:', audioContextRef.current.state);
+        console.log('🔌 MediaStream active:', stream.active, 'tracks:', stream.getTracks().map(t => ({enabled: t.enabled, kind: t.kind, readyState: t.readyState})));
+      }, 100);
+
+    } catch (error) {
+      console.error('❌ Error starting recording:', error);
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        code: error.code,
+        constraint: error.constraint
+      });
+      
+      setIsRecording(false);
+      setIsListening(false);
+      setCurrentActivity('idle');
+      
+      if (error.name === 'NotAllowedError') {
+        alert('Microphone permission denied. Please allow microphone access.');
+      } else if (error.name === 'NotFoundError') {
+        alert('No microphone found. Please connect a microphone.');
+      } else if (error.name === 'NotReadableError') {
+        alert('Microphone is being used by another application.');
+      } else {
+        alert('Error accessing microphone: ' + error.message);
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    console.log('⏹️ Stopping Realtime recording...');
+    
+    if (mediaRecorderRef.current) {
+      const { source, processor, stream } = mediaRecorderRef.current;
+      
+      if (source) source.disconnect();
+      if (processor) processor.disconnect();
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+
+      mediaRecorderRef.current = null;
+    }
+
+    setIsRecording(false);
+    setIsListening(false);
+    setCurrentActivity('processing');
+    
+    // Send any remaining buffered audio if we have enough
+    if (audioBufferRef.current.length > 0 && audioBufferTimeRef.current >= 100) {
+      // Combine remaining audio
+      const totalLength = audioBufferRef.current.reduce((sum, arr) => sum + arr.length, 0);
+      const combinedAudio = new Int16Array(totalLength);
+      let offset = 0;
+      
+      for (const chunk of audioBufferRef.current) {
+        combinedAudio.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      // Convert to base64 and send
+      const uint8Array = new Uint8Array(combinedAudio.buffer);
+      const base64Audio = btoa(String.fromCharCode(...uint8Array));
+      
+      // Send final audio chunk
+      sendAudioChunk(base64Audio);
+      
+      // Commit audio buffer to OpenAI only if we sent audio
+      setTimeout(() => {
+        if (subscriptionRef.current) {
+          console.log(`🎯 Committing audio buffer (${audioBufferTimeRef.current.toFixed(2)}ms of audio)`);
+          subscriptionRef.current.send({ type: 'commit_audio' });
+        }
+      }, 100);
+    } else {
+      console.log(`⚠️ Not committing audio - insufficient data (${audioBufferTimeRef.current.toFixed(2)}ms)`);
+    }
+    
+    // Reset audio buffer
+    audioBufferRef.current = [];
+    audioBufferTimeRef.current = 0;
+  };
+
+  const sendAudioChunk = async (audioData) => {
+    try {
+      if (!subscriptionRef.current) {
+        console.warn('⚠️ No ActionCable subscription - cannot send audio');
+        return;
+      }
+
+      console.log(`📤 Sending audio chunk to backend: ${audioData.length} chars`);
+
+      // audioData should already be base64 encoded PCM16 from our audio processing
+      subscriptionRef.current.send({
+        type: 'audio',
+        audio: audioData
+      });
+
+    } catch (error) {
+      console.error('❌ Error sending audio chunk:', error);
+    }
+  };
+
+  // Test microphone access independently
+  const testMicrophone = async () => {
+    try {
+      console.log('🧪 Testing microphone access...');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log('✅ Microphone test successful!');
+      console.log('🎤 Available audio tracks:', stream.getAudioTracks().map(track => ({
+        label: track.label,
+        enabled: track.enabled,
+        kind: track.kind,
+        readyState: track.readyState
+      })));
+      
+      // Test audio levels
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      const checkAudio = () => {
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+        console.log(`🎵 Audio level: ${average.toFixed(2)}`);
+        
+        if (average > 10) {
+          console.log('🔊 AUDIO DETECTED IN TEST!');
+        }
+      };
+      
+      // Check for 5 seconds
+      const interval = setInterval(checkAudio, 500);
+      setTimeout(() => {
+        clearInterval(interval);
+        stream.getTracks().forEach(track => track.stop());
+        audioContext.close();
+        console.log('🧪 Microphone test completed');
+      }, 5000);
+      
+    } catch (error) {
+      console.error('❌ Microphone test failed:', error);
+    }
+  };
+
+  // Test audio playback with a simple tone
+  const testAudioPlayback = async () => {
+    try {
+      console.log('🧪 Testing audio playback...');
+      await ensureAudioContextReady();
+      
+      if (!audioContextRef.current) {
+        console.error('❌ No AudioContext available');
+        return;
+      }
+
+      // Create a simple 440Hz tone for 1 second
+      const duration = 1;
+      const frequency = 440;
+      const sampleRate = audioContextRef.current.sampleRate;
+      const bufferSize = sampleRate * duration;
+      
+      const audioBuffer = audioContextRef.current.createBuffer(1, bufferSize, sampleRate);
+      const channelData = audioBuffer.getChannelData(0);
+      
+      // Generate sine wave
+      for (let i = 0; i < bufferSize; i++) {
+        channelData[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 0.1;
+      }
+      
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      source.start();
+      
+      console.log('🔊 Playing test tone...');
+      
+    } catch (error) {
+      console.error('❌ Audio playback test failed:', error);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isSpeaking) {
+      console.log('🔇 Cannot toggle recording - AI is speaking');
+      return;
+    }
+
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  const toggleConversationMode = () => {
+    const newMode = !conversationMode;
+    setConversationMode(newMode);
+    
+    if (newMode) {
+      console.log('🔄 Starting conversation mode');
+      setTimeout(() => {
+        if (!isSpeaking && !isRecording) {
+          startRecording();
+        }
+      }, 500);
+    } else {
+      console.log('⏹️ Stopping conversation mode');
+      if (isRecording) {
+        stopRecording();
+      }
+    }
+  };
+
+  const toggleVoice = () => {
+    setVoiceEnabled(!voiceEnabled);
+    console.log('🔊 Voice toggled to:', !voiceEnabled);
+  };
+
+  // Update handleSendMessage for Realtime API
+  const handleSendMessage = () => {
+    const messageText = inputValue.trim();
+    if (!messageText || !isConnected) return;
+
+    console.log('📤 Sending text message:', messageText);
+
+    const userMessage = { 
+      id: Date.now(), 
+      text: messageText, 
+      sender: 'user', 
+      timestamp: new Date() 
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    setCurrentActivity('thinking');
+
+    // Send text to Realtime API via Rails
+    subscriptionRef.current.send({
+      type: 'text',
+      message: messageText
+    });
+
+    setInputValue('');
+  };
+
+  const testRealtimeConnection = () => {
+    console.log('🧪 Testing Realtime connection...');
+    const testMessage = "Hello, this is a test of the OpenAI Realtime API integration.";
+    
+    const userMessage = { 
+      id: Date.now(), 
+      text: testMessage, 
+      sender: 'user', 
+      timestamp: new Date() 
+    };
+    setMessages(prev => [...prev, userMessage]);
+
+    if (subscriptionRef.current) {
+      subscriptionRef.current.send({
+        type: 'text',
+        message: testMessage
+      });
+    }
+  };
+
+  // Legacy Whisper Speech Recognition Functions (keeping for fallback)
   const startWhisperRecording = async () => {
     try {
       // Prevent recording if AI is currently speaking to avoid feedback loop
@@ -481,7 +1050,16 @@ const AIAvatar = () => {
         return;
       }
       
+      // Additional state debugging
       console.log('🎤 Starting Whisper recording...');
+      console.log('📊 Current states:', {
+        isListening,
+        isRecording,
+        isSpeaking,
+        conversationMode,
+        currentActivity,
+        synthSpeaking: synthRef.current?.speaking
+      });
       
       // Check if getUserMedia is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -583,7 +1161,7 @@ const AIAvatar = () => {
       recordingTimeoutRef.current = setTimeout(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           console.log('⏰ Auto-stopping recording after 30 seconds');
-          stopWhisperRecording();
+          stopRecording();
         }
       }, 30000);
       
@@ -660,13 +1238,11 @@ const AIAvatar = () => {
           console.log('📝 Setting input value to:', transcribedText);
           setInputValue(transcribedText);
           
-          // Auto-send the transcribed text
+          // Auto-send the transcribed text immediately for seamless conversation
           if (transcribedText.length > 1) {
-            console.log('🚀 Auto-sending Whisper transcription in 500ms');
-            setTimeout(() => {
-              console.log('📨 Executing handleSendMessage with:', transcribedText);
-              handleSendMessage(transcribedText);
-            }, 500);
+            console.log('🚀 Auto-sending Whisper transcription immediately');
+            console.log('📨 Executing handleSendMessage with:', transcribedText);
+            handleSendMessage(transcribedText);
           }
         } else {
           console.warn('⚠️ Empty transcription received');
@@ -706,17 +1282,8 @@ const AIAvatar = () => {
   };
 
   const toggleListening = () => {
-    // Prevent toggling if AI is currently speaking
-    if (isSpeaking) {
-      console.log('🔇 Cannot toggle recording - AI is currently speaking');
-      return;
-    }
-    
-    if (isListening || isRecording) {
-      stopWhisperRecording();
-    } else {
-      startWhisperRecording();
-    }
+    // Use the new Realtime API recording functions
+    toggleRecording();
   };
 
   // Text-to-speech function with enhanced debugging and voice loading
@@ -765,7 +1332,7 @@ const AIAvatar = () => {
     
     if (isListening) {
       console.log('Pausing speech recognition during TTS to prevent feedback loop');
-      stopWhisperRecording();
+      stopRecording();
     }
     
     // Immediately set speaking state to prevent any new recording attempts
@@ -843,13 +1410,33 @@ const AIAvatar = () => {
       if (conversationMode) {
         console.log('🔄 Auto-resuming listening after AI response');
         setTimeout(() => {
+          // Get current state to avoid closure issues
+          const currentSpeaking = synthRef.current?.speaking;
+          const currentConversationMode = conversationModeRef.current;
+          const currentIsListening = isListeningRef.current;
+          const currentIsRecording = isRecordingRef.current;
+          
+          console.log('🔍 Auto-resume state check:', {
+            synthSpeaking: currentSpeaking,
+            conversationMode: currentConversationMode,
+            isListening: currentIsListening,
+            isRecording: currentIsRecording,
+            currentActivity
+          });
+          
           // Double-check that we're not still speaking and conversation mode is still active
-          if (!synthRef.current?.speaking && !isSpeaking && conversationMode) {
-            startWhisperRecording();
+          if (!currentSpeaking && currentConversationMode && !currentIsListening && !currentIsRecording) {
+            console.log('✅ Starting auto-resume recording');
+            startRecording();
           } else {
-            console.log('🔇 Skipping auto-resume: speech still active or conversation mode disabled');
+            console.log('🔇 Skipping auto-resume:', {
+              reason: currentSpeaking ? 'still speaking' : 
+                     !currentConversationMode ? 'conversation mode off' :
+                     currentIsListening ? 'already listening' :
+                     currentIsRecording ? 'already recording' : 'unknown'
+            });
           }
-        }, 1500); // Increased delay to ensure speech is completely finished
+        }, 800); // Reduced delay for faster conversation flow
       }
     };
     
@@ -866,13 +1453,33 @@ const AIAvatar = () => {
       if (conversationMode) {
         console.log('🔄 Auto-resuming listening after TTS error');
         setTimeout(() => {
+          // Get current state to avoid closure issues
+          const currentSpeaking = synthRef.current?.speaking;
+          const currentConversationMode = conversationModeRef.current;
+          const currentIsListening = isListeningRef.current;
+          const currentIsRecording = isRecordingRef.current;
+          
+          console.log('🔍 Auto-resume error state check:', {
+            synthSpeaking: currentSpeaking,
+            conversationMode: currentConversationMode,
+            isListening: currentIsListening,
+            isRecording: currentIsRecording,
+            currentActivity
+          });
+          
           // Double-check that we're not still speaking and conversation mode is still active
-          if (!synthRef.current?.speaking && !isSpeaking && conversationMode) {
-            startWhisperRecording();
+          if (!currentSpeaking && currentConversationMode && !currentIsListening && !currentIsRecording) {
+            console.log('✅ Starting auto-resume recording after error');
+            startRecording();
           } else {
-            console.log('🔇 Skipping auto-resume after error: speech still active or conversation mode disabled');
+            console.log('🔇 Skipping auto-resume after error:', {
+              reason: currentSpeaking ? 'still speaking' : 
+                     !currentConversationMode ? 'conversation mode off' :
+                     currentIsListening ? 'already listening' :
+                     currentIsRecording ? 'already recording' : 'unknown'
+            });
           }
-        }, 1500); // Increased delay for safety
+        }, 800); // Reduced delay for faster conversation flow
       }
     };
     
@@ -921,48 +1528,9 @@ const AIAvatar = () => {
     }
   };
 
-  const toggleVoice = () => {
-    console.log('Toggling voice, current state:', voiceEnabled);
-    
-    if (isSpeaking) {
-      console.log('Cancelling current speech...');
-      synthRef.current?.cancel();
-      setIsSpeaking(false);
-    }
-    
-    const newVoiceEnabled = !voiceEnabled;
-    setVoiceEnabled(newVoiceEnabled);
-    
-    // If enabling voice, ensure speech synthesis is properly initialized
-    if (newVoiceEnabled && (!synthRef.current || synthRef.current.getVoices().length === 0)) {
-      console.log('Reinitializing speech synthesis...');
-      if ('speechSynthesis' in window) {
-        synthRef.current = window.speechSynthesis;
-        
-        // Force voice loading
-        setTimeout(() => {
-          const voices = synthRef.current.getVoices();
-          console.log('Voices after reinitialization:', voices.length);
-          if (voices.length === 0) {
-            // Try the dummy utterance trick
-            const dummyUtterance = new SpeechSynthesisUtterance('');
-            dummyUtterance.volume = 0;
-            try {
-              synthRef.current.speak(dummyUtterance);
-            } catch (e) {
-              console.warn('Error with reinitialization dummy utterance:', e);
-            }
-          }
-        }, 100);
-      }
-    }
-    
-    console.log('Voice toggled to:', newVoiceEnabled);
-  };
-
-  const testWhisperFlow = () => {
-    console.log('🧪 Testing Whisper flow with dummy text...');
-    const testText = "This is a test of the Whisper transcription flow.";
+  const testRealtimeFlow = () => {
+    console.log('🧪 Testing Realtime flow with dummy text...');
+    const testText = "This is a test of the OpenAI Realtime API integration.";
     console.log('📝 Setting test text:', testText);
     setInputValue(testText);
     
@@ -1038,9 +1606,9 @@ const AIAvatar = () => {
         <Box sx={{ display: 'flex', gap: 3, alignItems: 'center', mb: 2 }}>
           <Avatar sx={{ width: 96, height: 96 }}>AI</Avatar>
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h5">AI Avatar</Typography>
+            <Typography variant="h5">AI Career Coach (Realtime)</Typography>
             <Typography variant="body2" color="text.secondary">
-              This page provides a chat interface for interacting with the AI assistant. Public visitors can chat, and admins have extra controls.
+              Real-time voice conversation with your AI Career Coach using OpenAI's latest technology. Experience ultra-low latency (~200ms) with built-in echo cancellation.
             </Typography>
             {remaining && (
               <Typography variant="subtitle2" color="primary" sx={{ mt: 1 }}>
@@ -1153,18 +1721,7 @@ const AIAvatar = () => {
                 <Button
                   variant={conversationMode ? 'contained' : 'outlined'}
                   size="small"
-                  onClick={() => {
-                    setConversationMode(!conversationMode);
-                    if (!conversationMode) {
-                      // Starting conversation mode - auto-start listening
-                      console.log('🔄 Starting conversation mode');
-                      setTimeout(() => startWhisperRecording(), 500);
-                    } else {
-                      // Stopping conversation mode - stop any recording
-                      console.log('⏹️ Stopping conversation mode');
-                      if (isRecording) stopWhisperRecording();
-                    }
-                  }}
+                  onClick={toggleConversationMode}
                   disabled={!isConnected}
                   sx={{ 
                     backgroundColor: conversationMode ? '#4caf50' : 'transparent',
@@ -1294,15 +1851,52 @@ const AIAvatar = () => {
                   Test Voice
                 </Button>
                 
-                {/* Test Whisper Flow Button */}
+                {/* Test Realtime Flow Button */}
                 <Button
                   variant="outlined"
                   size="small"
-                  onClick={testWhisperFlow}
+                  onClick={testRealtimeConnection}
                   disabled={!isConnected}
                   sx={{ ml: 1, backgroundColor: '#f3e5f5', color: '#9c27b0', borderColor: '#9c27b0' }}
                 >
-                  Test Flow
+                  Test Realtime
+                </Button>
+                
+                {/* Test Microphone Button */}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={testMicrophone}
+                  sx={{ ml: 1, backgroundColor: '#e3f2fd', color: '#1976d2', borderColor: '#1976d2' }}
+                >
+                  Test Mic
+                </Button>
+                
+                {/* Test Voice Recording Button */}
+                <Button
+                  variant="outlined" 
+                  size="small"
+                  onClick={() => {
+                    if (isRecording) {
+                      stopRecording();
+                    } else {
+                      startRecording();
+                    }
+                  }}
+                  disabled={isSpeaking}
+                  sx={{ ml: 1, backgroundColor: isRecording ? '#ffebee' : '#e8f5e8', color: isRecording ? '#d32f2f' : '#2e7d32', borderColor: isRecording ? '#d32f2f' : '#2e7d32' }}
+                >
+                  {isRecording ? 'Stop Voice' : 'Test Voice Recording'}
+                </Button>
+                
+                {/* Test Audio Playback Button */}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={testAudioPlayback}
+                  sx={{ ml: 1, backgroundColor: '#fff3e0', color: '#f57c00', borderColor: '#f57c00' }}
+                >
+                  Test Audio
                 </Button>
               </Box>
             </Paper>
