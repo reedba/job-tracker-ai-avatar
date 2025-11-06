@@ -9,7 +9,6 @@ import SendIcon from '@mui/icons-material/Send';
 import MicIcon from '@mui/icons-material/Mic';
 import MicOffIcon from '@mui/icons-material/MicOff';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
-import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import { useState, useEffect, useRef } from 'react';
 import { getConsumer } from '../../utils/cable';
 import { createAvatarLink } from '../../features/avatarLinks/avatarLinksSlice';
@@ -56,8 +55,7 @@ const AIAvatar = () => {
   const lastCreatedLink = useSelector((state) => state.avatarLinks.lastCreated);
   const avatarLinksError = useSelector((state) => state.avatarLinks.error);
 
-  // Inline chat state
-  const [isOpen, setIsOpen] = useState(true);
+  // Chat state
   const [messages, setMessages] = useState([
     { id: 'welcome', text: "Hi — I'm your AI Career Coach with real-time voice conversation powered by OpenAI's Realtime API. Experience ultra-low latency conversations - just start talking!", sender: 'bot', timestamp: new Date() }
   ]);
@@ -74,12 +72,9 @@ const AIAvatar = () => {
   const [conversationMode, setConversationMode] = useState(false);
   const [currentActivity, setCurrentActivity] = useState('idle');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [autoResumeListening, setAutoResumeListening] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
   
   // Audio handling for Realtime API
   const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
   const audioQueueRef = useRef([]);
   const isPlayingAudioRef = useRef(false);
@@ -105,12 +100,10 @@ const AIAvatar = () => {
       isRecording,
       conversationMode,
       currentActivity,
-      autoResumeListening,
-      isProcessing,
       isConnected,
       synthSpeaking: synthRef.current?.speaking || false
     });
-  }, [isListening, isSpeaking, isRecording, conversationMode, currentActivity, autoResumeListening, isProcessing, isConnected]);
+  }, [isListening, isSpeaking, isRecording, conversationMode, currentActivity, isConnected]);
 
   // Sync state with refs for legacy TTS functions
   useEffect(() => {
@@ -1041,246 +1034,6 @@ const AIAvatar = () => {
     }
   };
 
-  // Legacy Whisper Speech Recognition Functions (keeping for fallback)
-  const startWhisperRecording = async () => {
-    try {
-      // Prevent recording if AI is currently speaking to avoid feedback loop
-      if (isSpeaking) {
-        console.log('🔇 Cannot start recording - AI is currently speaking');
-        return;
-      }
-      
-      // Additional state debugging
-      console.log('🎤 Starting Whisper recording...');
-      console.log('📊 Current states:', {
-        isListening,
-        isRecording,
-        isSpeaking,
-        conversationMode,
-        currentActivity,
-        synthSpeaking: synthRef.current?.speaking
-      });
-      
-      // Check if getUserMedia is supported
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        console.error('getUserMedia not supported in this browser');
-        alert('Microphone access not supported in this browser');
-        return;
-      }
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
-      });
-      
-      console.log('✅ Microphone access granted');
-      
-      // Check MediaRecorder support
-      if (!window.MediaRecorder) {
-        console.error('MediaRecorder not supported in this browser');
-        alert('Audio recording not supported in this browser');
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-      
-      // Check supported MIME types
-      const mimeTypes = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/mp4',
-        'audio/wav'
-      ];
-      
-      let selectedMimeType = null;
-      for (const mimeType of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          selectedMimeType = mimeType;
-          console.log('✅ Using MIME type:', mimeType);
-          break;
-        }
-      }
-      
-      if (!selectedMimeType) {
-        console.error('No supported audio MIME types found');
-        alert('Audio recording format not supported');
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-      
-      audioChunksRef.current = [];
-      mediaRecorderRef.current = new MediaRecorder(stream, {
-        mimeType: selectedMimeType
-      });
-      
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        console.log('📊 Audio data chunk received:', event.data.size, 'bytes');
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-      
-      mediaRecorderRef.current.onstart = () => {
-        console.log('🔴 Recording started');
-      };
-      
-      mediaRecorderRef.current.onstop = async () => {
-        console.log('⏹️ Recording stopped, processing with Whisper...');
-        
-        if (audioChunksRef.current.length === 0) {
-          console.warn('No audio data recorded');
-          return;
-        }
-        
-        const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
-        console.log('📦 Audio blob created:', audioBlob.size, 'bytes, type:', audioBlob.type);
-        
-        // Stop all tracks to release the microphone
-        stream.getTracks().forEach(track => {
-          track.stop();
-          console.log('🛑 Stopped track:', track.kind);
-        });
-        
-        await processWithWhisper(audioBlob);
-      };
-      
-      mediaRecorderRef.current.onerror = (event) => {
-        console.error('❌ MediaRecorder error:', event.error);
-      };
-      
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-      setIsListening(true);
-      setCurrentActivity('listening');
-      
-      console.log('🟢 Recording started successfully');
-      
-      // Auto-stop recording after 30 seconds to prevent infinite recording
-      recordingTimeoutRef.current = setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          console.log('⏰ Auto-stopping recording after 30 seconds');
-          stopRecording();
-        }
-      }, 30000);
-      
-    } catch (error) {
-      console.error('❌ Error starting Whisper recording:', error);
-      setIsRecording(false);
-      setIsListening(false);
-      
-      if (error.name === 'NotAllowedError') {
-        alert('Microphone permission denied. Please allow microphone access and try again.');
-      } else if (error.name === 'NotFoundError') {
-        alert('No microphone found. Please connect a microphone and try again.');
-      } else {
-        alert('Error accessing microphone: ' + error.message);
-      }
-    }
-  };
-  
-  const stopWhisperRecording = () => {
-    console.log('Stopping Whisper recording...');
-    
-    if (recordingTimeoutRef.current) {
-      clearTimeout(recordingTimeoutRef.current);
-      recordingTimeoutRef.current = null;
-    }
-    
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-    
-    setIsRecording(false);
-    setIsListening(false);
-    setCurrentActivity('processing');
-  };
-  
-  const processWithWhisper = async (audioBlob) => {
-    try {
-      console.log('🤖 Processing audio with Whisper API...');
-      console.log('📊 Audio blob details:', {
-        size: audioBlob.size,
-        type: audioBlob.type
-      });
-      
-      // Minimum size check
-      if (audioBlob.size < 1000) {
-        console.warn('⚠️ Audio blob too small:', audioBlob.size, 'bytes');
-        alert('Recording too short. Please speak longer.');
-        return;
-      }
-      
-      // Create FormData for Whisper API
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.webm');
-      formData.append('model', 'whisper-1');
-      formData.append('language', 'en');
-      formData.append('response_format', 'json');
-      
-      console.log('📤 Sending to Whisper API...');
-      
-      const response = await axios.post('/api/speech/transcribe', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        timeout: 30000 // 30 second timeout
-      });
-      
-      console.log('📥 Whisper API response:', response.data);
-      
-      if (response.data && response.data.text) {
-        const transcribedText = response.data.text.trim();
-        console.log('✅ Whisper transcription successful:', transcribedText);
-        
-        if (transcribedText.length > 0) {
-          console.log('📝 Setting input value to:', transcribedText);
-          setInputValue(transcribedText);
-          
-          // Auto-send the transcribed text immediately for seamless conversation
-          if (transcribedText.length > 1) {
-            console.log('🚀 Auto-sending Whisper transcription immediately');
-            console.log('📨 Executing handleSendMessage with:', transcribedText);
-            handleSendMessage(transcribedText);
-          }
-        } else {
-          console.warn('⚠️ Empty transcription received');
-          alert('No speech detected. Please try speaking again.');
-        }
-      } else {
-        console.warn('⚠️ No transcription text in response');
-        alert('No transcription received. Please try again.');
-      }
-    } catch (error) {
-      console.error('❌ Whisper transcription error:', error);
-      
-      // Detailed error logging
-      if (error.response) {
-        console.error('Response status:', error.response.status);
-        console.error('Response data:', error.response.data);
-        console.error('Response headers:', error.response.headers);
-      } else if (error.request) {
-        console.error('No response received:', error.request);
-      } else {
-        console.error('Error setting up request:', error.message);
-      }
-      
-      // User-friendly error messages
-      if (error.response?.status === 429) {
-        alert('Whisper API rate limit reached. Please wait a moment and try again.');
-      } else if (error.response?.status === 400) {
-        alert('Invalid audio format. Please try recording again.');
-      } else if (error.response?.status === 401) {
-        alert('Authentication error. Please check your OpenAI API key configuration.');
-      } else if (error.code === 'ECONNABORTED') {
-        alert('Request timed out. Please try with a shorter recording.');
-      } else {
-        alert('Transcription failed: ' + (error.response?.data?.error || error.message));
-      }
-    }
-  };
-
   const toggleListening = () => {
     // Use the new Realtime API recording functions
     toggleRecording();
@@ -1528,18 +1281,6 @@ const AIAvatar = () => {
     }
   };
 
-  const testRealtimeFlow = () => {
-    console.log('🧪 Testing Realtime flow with dummy text...');
-    const testText = "This is a test of the OpenAI Realtime API integration.";
-    console.log('📝 Setting test text:', testText);
-    setInputValue(testText);
-    
-    setTimeout(() => {
-      console.log('🚀 Auto-sending test text');
-      handleSendMessage(testText);
-    }, 1000);
-  };
-
   const testTTS = () => {
     console.log('🧪 Testing TTS...');
     console.log('Browser support:', {
@@ -1620,7 +1361,7 @@ const AIAvatar = () => {
               <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                 {isRecording && (
                   <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <MicIcon fontSize="small" /> Recording (Whisper AI)...
+                    <MicIcon fontSize="small" /> Recording (Realtime API)...
                   </Typography>
                 )}
                 {isSpeaking && (
@@ -1805,7 +1546,7 @@ const AIAvatar = () => {
 
               {/* Manual Speech Controls */}
               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2 }}>
-                {/* Microphone Button for Whisper Recording */}
+                {/* Microphone Button for Realtime Recording */}
                 <Fab
                   color={isListening || isRecording ? 'secondary' : 'primary'}
                   onClick={toggleListening}
@@ -1817,7 +1558,7 @@ const AIAvatar = () => {
                       backgroundColor: (isListening || isRecording) ? '#7b1fa2' : '#1976d2'
                     }
                   }}
-                  title="Record with Whisper AI"
+                  title="Voice Recording"
                 >
                   {(isListening || isRecording) ? <MicIcon /> : <MicOffIcon />}
                 </Fab>
@@ -1839,65 +1580,6 @@ const AIAvatar = () => {
                 >
                   <VolumeUpIcon fontSize="small" />
                 </Fab>
-                
-                {/* Test TTS Button */}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={testTTS}
-                  disabled={!voiceEnabled}
-                  sx={{ ml: 1 }}
-                >
-                  Test Voice
-                </Button>
-                
-                {/* Test Realtime Flow Button */}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={testRealtimeConnection}
-                  disabled={!isConnected}
-                  sx={{ ml: 1, backgroundColor: '#f3e5f5', color: '#9c27b0', borderColor: '#9c27b0' }}
-                >
-                  Test Realtime
-                </Button>
-                
-                {/* Test Microphone Button */}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={testMicrophone}
-                  sx={{ ml: 1, backgroundColor: '#e3f2fd', color: '#1976d2', borderColor: '#1976d2' }}
-                >
-                  Test Mic
-                </Button>
-                
-                {/* Test Voice Recording Button */}
-                <Button
-                  variant="outlined" 
-                  size="small"
-                  onClick={() => {
-                    if (isRecording) {
-                      stopRecording();
-                    } else {
-                      startRecording();
-                    }
-                  }}
-                  disabled={isSpeaking}
-                  sx={{ ml: 1, backgroundColor: isRecording ? '#ffebee' : '#e8f5e8', color: isRecording ? '#d32f2f' : '#2e7d32', borderColor: isRecording ? '#d32f2f' : '#2e7d32' }}
-                >
-                  {isRecording ? 'Stop Voice' : 'Test Voice Recording'}
-                </Button>
-                
-                {/* Test Audio Playback Button */}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={testAudioPlayback}
-                  sx={{ ml: 1, backgroundColor: '#fff3e0', color: '#f57c00', borderColor: '#f57c00' }}
-                >
-                  Test Audio
-                </Button>
               </Box>
             </Paper>
           </Box>
