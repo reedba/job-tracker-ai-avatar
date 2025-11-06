@@ -15,8 +15,6 @@ import { getConsumer } from '../../utils/cable';
 import { createAvatarLink } from '../../features/avatarLinks/avatarLinksSlice';
 import PersonIcon from '@mui/icons-material/Person';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
-import { PorcupineWorker } from '@picovoice/porcupine-web';
-import { WebVoiceProcessor } from '@picovoice/web-voice-processor';
 
 const AIAvatar = () => {
   const navigate = useNavigate();
@@ -45,7 +43,7 @@ const AIAvatar = () => {
   // Inline chat state
   const [isOpen, setIsOpen] = useState(true);
   const [messages, setMessages] = useState([
-    { id: 'welcome', text: "Hi — I'm your AI Avatar (Phase 2: OpenAI Integration). Ask me anything about your job search!", sender: 'bot', timestamp: new Date() }
+    { id: 'welcome', text: "Hi — I'm your AI Avatar with Whisper speech recognition. Ask me anything about your job search!", sender: 'bot', timestamp: new Date() }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -53,278 +51,87 @@ const AIAvatar = () => {
   const subscriptionRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  // Speech recognition state
+  // Speech recognition state (Whisper only)
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [isWakeWordMode, setIsWakeWordMode] = useState(false);
-  const [wakeWordDetected, setWakeWordDetected] = useState(false);
-  const recognitionRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
   const synthRef = useRef(null);
-  const autoSendTimeoutRef = useRef(null);
-  const porcupineWorkerRef = useRef(null);
-  const webVoiceProcessorRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimeoutRef = useRef(null);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages]);
 
-  // Initialize Porcupine wake word detection
+  // Initialize speech synthesis only
   useEffect(() => {
-    const initializePorcupine = async () => {
-      try {
-        console.log('Initializing Porcupine wake word detection...');
-        
-        // Use the built-in "hey siri" wake word as a placeholder 
-        // (we'll use speech recognition to detect "hey brandon" after wake word triggers)
-        porcupineWorkerRef.current = await PorcupineWorker.create(
-          process.env.REACT_APP_PICOVOICE_ACCESS_KEY || 'demo', // You'll need to get a free API key from Picovoice
-          [{ builtin: 'hey siri' }], // Using built-in wake word
-          (keywordIndex) => {
-            console.log('Wake word detected by Porcupine!');
-            setWakeWordDetected(true);
-            
-            // Start regular speech recognition after wake word detection
-            if (recognitionRef.current && speechEnabled) {
-              try {
-                recognitionRef.current.start();
-              } catch (e) {
-                console.warn('Failed to start speech recognition after wake word:', e);
-              }
-            }
-          }
-        );
-
-        webVoiceProcessorRef.current = await WebVoiceProcessor.init({
-          engines: [porcupineWorkerRef.current],
-          start: false
-        });
-
-        console.log('Porcupine initialized successfully');
-      } catch (error) {
-        console.warn('Failed to initialize Porcupine:', error);
-        console.log('Falling back to Web Speech API for wake word detection');
-      }
-    };
-
-    initializePorcupine();
-
-    return () => {
-      if (porcupineWorkerRef.current) {
-        porcupineWorkerRef.current.terminate();
-      }
-      if (webVoiceProcessorRef.current) {
-        webVoiceProcessorRef.current.release();
-      }
-    };
-  }, []);
-
-  // Initialize speech recognition
-  useEffect(() => {
-    if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
-
-      recognitionRef.current.onstart = () => {
-        console.log('Speech recognition started');
-        setIsListening(true);
-      };
-
-      recognitionRef.current.onresult = (event) => {
-        // Ignore speech recognition while AI is speaking to prevent feedback loop
-        if (isSpeaking) {
-          console.log('Ignoring speech recognition while AI is speaking');
-          return;
-        }
-        
-        let finalTranscript = '';
-        let interimTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        if (finalTranscript) {
-          console.log('Final transcript:', finalTranscript);
-          
-          // Check if this was triggered by wake word detection
-          if (wakeWordDetected) {
-            console.log('Processing speech after wake word detection');
-            setWakeWordDetected(false);
-            
-            // Check if user said "hey brandon" or similar
-            const lowerTranscript = finalTranscript.toLowerCase();
-            if (lowerTranscript.includes('brandon') || lowerTranscript.includes('hey')) {
-              // Extract command after wake phrase
-              let command = finalTranscript.trim();
-              
-              // Remove common wake phrases
-              command = command.replace(/^(hey\s+)?(brandon\s*)/i, '').trim();
-              
-              console.log('Command after wake word:', command);
-              
-              if (command) {
-                setInputValue(command);
-                setTimeout(() => handleSendMessage(command), 100);
-              } else {
-                // No command after wake word, just acknowledge
-                setInputValue('');
-                const wakeMessage = { 
-                  id: Date.now(), 
-                  text: "Yes? How can I help you?", 
-                  sender: 'bot', 
-                  timestamp: new Date() 
-                };
-                setMessages(prev => [...prev, wakeMessage]);
-                
-                if (voiceEnabled) {
-                  speakText("Yes? How can I help you?");
-                }
-              }
-            }
-            
-            // Restart wake word detection
-            if (isWakeWordMode && webVoiceProcessorRef.current) {
-              setTimeout(() => {
-                webVoiceProcessorRef.current.start();
-              }, 1000);
-            }
-          } else if (isWakeWordMode && finalTranscript.toLowerCase().includes('hey brandon')) {
-            // Fallback to old method if Porcupine isn't working
-            console.log('Wake word detected via speech recognition fallback');
-            setIsWakeWordMode(false);
-            
-            const afterWakeWord = finalTranscript.toLowerCase().split('hey brandon')[1]?.trim();
-            console.log('Text after wake word:', afterWakeWord);
-            
-            if (afterWakeWord) {
-              setInputValue(afterWakeWord);
-              setTimeout(() => handleSendMessage(afterWakeWord), 100);
-            } else {
-              setInputValue('');
-              const wakeMessage = { 
-                id: Date.now(), 
-                text: "Yes? How can I help you?", 
-                sender: 'bot', 
-                timestamp: new Date() 
-              };
-              setMessages(prev => [...prev, wakeMessage]);
-              
-              if (voiceEnabled) {
-                speakText("Yes? How can I help you?");
-              }
-            }
-          } else if (!isWakeWordMode) {
-            // Normal speech input - update input field
-            const trimmedText = finalTranscript.trim();
-            console.log('Normal speech input:', trimmedText);
-            setInputValue(trimmedText);
-            
-            // Clear any existing auto-send timeout
-            if (autoSendTimeoutRef.current) {
-              clearTimeout(autoSendTimeoutRef.current);
-              autoSendTimeoutRef.current = null;
-            }
-            
-            // Auto-send after a brief delay - only if we have meaningful text
-            if (trimmedText && trimmedText.length > 1) {
-              console.log('Setting auto-send timeout for:', trimmedText);
-              autoSendTimeoutRef.current = setTimeout(() => {
-                console.log('Auto-sending message:', trimmedText);
-                handleSendMessage(trimmedText);
-                setInputValue(''); // Clear input after sending
-              }, 1500); // Reduced to 1.5 seconds for faster response
-            }
-          }
-        }
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        console.log('Speech recognition ended');
-        setIsListening(false);
-        
-        // If we have text in the input and are not in wake word mode, auto-send it
-        if (!isWakeWordMode && inputValue.trim() && inputValue.trim().length > 1) {
-          console.log('Speech ended with text, auto-sending:', inputValue.trim());
-          // Clear any existing timeout
-          if (autoSendTimeoutRef.current) {
-            clearTimeout(autoSendTimeoutRef.current);
-            autoSendTimeoutRef.current = null;
-          }
-          // Send immediately when speech recognition ends
-          setTimeout(() => {
-            const textToSend = inputValue.trim();
-            if (textToSend) {
-              console.log('Sending message on speech end:', textToSend);
-              handleSendMessage(textToSend);
-              setInputValue('');
-            }
-          }, 500); // Small delay to ensure UI updates
-        }
-        
-        // Restart if in wake word mode
-        if (isWakeWordMode && speechEnabled) {
-          console.log('Restarting speech recognition for wake word mode');
-          setTimeout(() => {
-            if (recognitionRef.current && isWakeWordMode) {
-              try {
-                recognitionRef.current.start();
-              } catch (e) {
-                console.warn('Failed to restart speech recognition:', e);
-              }
-            }
-          }, 1000);
-        }
-      };
-    }
-
-    // Initialize speech synthesis
+    // Initialize speech synthesis with enhanced voice loading
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       synthRef.current = window.speechSynthesis;
       
-      // Load voices - sometimes they're not immediately available
+      // Enhanced voice loading with retry mechanism
+      let voiceLoadAttempts = 0;
+      const maxVoiceLoadAttempts = 5;
+      
       const loadVoices = () => {
         const voices = synthRef.current.getVoices();
-        console.log('Speech synthesis voices loaded:', voices.length);
+        voiceLoadAttempts++;
+        console.log(`Voice loading attempt ${voiceLoadAttempts}: ${voices.length} voices found`);
+        
+        if (voices.length > 0) {
+          console.log('✅ Speech synthesis voices loaded successfully:', voices.length);
+          voices.forEach((voice, index) => {
+            if (index < 5) { // Log first 5 voices for debugging
+              console.log(`  Voice ${index}: ${voice.name} (${voice.lang}) - ${voice.localService ? 'local' : 'remote'}`);
+            }
+          });
+        } else if (voiceLoadAttempts < maxVoiceLoadAttempts) {
+          console.log('No voices loaded yet, retrying in 500ms...');
+          setTimeout(loadVoices, 500);
+        } else {
+          console.warn('⚠️ Failed to load voices after maximum attempts');
+        }
       };
       
       // Load voices immediately if available
       loadVoices();
       
-      // Also load voices when they become available
+      // Also load voices when they become available (some browsers need this)
       if (synthRef.current.onvoiceschanged !== undefined) {
-        synthRef.current.onvoiceschanged = loadVoices;
+        synthRef.current.onvoiceschanged = () => {
+          console.log('Voices changed event triggered');
+          loadVoices();
+        };
       }
+      
+      // Force voice loading on some browsers
+      setTimeout(() => {
+        if (synthRef.current.getVoices().length === 0) {
+          console.log('Forcing voice loading by speaking empty utterance...');
+          const dummyUtterance = new SpeechSynthesisUtterance('');
+          dummyUtterance.volume = 0;
+          try {
+            synthRef.current.speak(dummyUtterance);
+          } catch (e) {
+            console.warn('Error with dummy utterance:', e);
+          }
+        }
+      }, 1000);
     } else {
       console.warn('Speech synthesis not supported in this browser');
     }
 
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
       if (synthRef.current) {
         synthRef.current.cancel();
       }
-      if (autoSendTimeoutRef.current) {
-        clearTimeout(autoSendTimeoutRef.current);
+      if (recordingTimeoutRef.current) {
+        clearTimeout(recordingTimeoutRef.current);
       }
     };
-  }, [isWakeWordMode, speechEnabled, isSpeaking, inputValue]);
+  }, []);
 
   // Try to restore an active guest session from sessionStorage so a browser
   // refresh won't force the visitor to re-open the modal if they've already
@@ -568,12 +375,6 @@ const AIAvatar = () => {
   }, [sessionToken, user, voiceEnabled]); // Added voiceEnabled to dependencies
 
   const handleSendMessage = (speechText = null) => {
-    // Clear any pending auto-send timeout
-    if (autoSendTimeoutRef.current) {
-      clearTimeout(autoSendTimeoutRef.current);
-      autoSendTimeoutRef.current = null;
-    }
-    
     const messageText = speechText || inputValue.trim();
     if (!messageText || isLoading || !isConnected) {
       console.warn('Cannot send message:', { messageText, isLoading, isConnected });
@@ -611,9 +412,9 @@ const AIAvatar = () => {
     // Always clear input after sending
     setInputValue('');
     
-    // Stop listening when sending message (but not if in wake word mode)
-    if (isListening && !isWakeWordMode) {
-      stopListening();
+    // Stop recording when sending message
+    if (isRecording) {
+      stopWhisperRecording();
     }
   };
 
@@ -628,103 +429,260 @@ const AIAvatar = () => {
     handleSendMessage();
   };
 
-  // Speech recognition functions
-  const startListening = (wakeWordMode = false) => {
-    if (!speechEnabled) return;
-    
-    console.log('Starting speech recognition, wake word mode:', wakeWordMode);
-    setIsWakeWordMode(wakeWordMode);
-    
-    if (wakeWordMode) {
-      // Start Porcupine wake word detection
-      if (webVoiceProcessorRef.current) {
-        try {
-          webVoiceProcessorRef.current.start();
-          console.log('Porcupine wake word detection started');
-        } catch (e) {
-          console.warn('Failed to start Porcupine, falling back to speech recognition:', e);
-          // Fallback to old method
-          if (recognitionRef.current) {
-            try {
-              recognitionRef.current.start();
-            } catch (err) {
-              console.warn('Failed to start speech recognition:', err);
-              setIsListening(false);
-              setIsWakeWordMode(false);
-            }
-          }
-        }
-      } else {
-        // Fallback if Porcupine not available
-        if (recognitionRef.current) {
-          try {
-            recognitionRef.current.start();
-          } catch (e) {
-            console.warn('Failed to start speech recognition:', e);
-            setIsListening(false);
-            setIsWakeWordMode(false);
-          }
+  // Whisper Speech Recognition Functions
+  const startWhisperRecording = async () => {
+    try {
+      console.log('🎤 Starting Whisper recording...');
+      
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.error('getUserMedia not supported in this browser');
+        alert('Microphone access not supported in this browser');
+        return;
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      console.log('✅ Microphone access granted');
+      
+      // Check MediaRecorder support
+      if (!window.MediaRecorder) {
+        console.error('MediaRecorder not supported in this browser');
+        alert('Audio recording not supported in this browser');
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      
+      // Check supported MIME types
+      const mimeTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/wav'
+      ];
+      
+      let selectedMimeType = null;
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          console.log('✅ Using MIME type:', mimeType);
+          break;
         }
       }
-    } else {
-      // Normal speech recognition
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {
-          console.warn('Failed to start speech recognition:', e);
-          setIsListening(false);
-          setIsWakeWordMode(false);
+      
+      if (!selectedMimeType) {
+        console.error('No supported audio MIME types found');
+        alert('Audio recording format not supported');
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = new MediaRecorder(stream, {
+        mimeType: selectedMimeType
+      });
+      
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        console.log('📊 Audio data chunk received:', event.data.size, 'bytes');
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
+      };
+      
+      mediaRecorderRef.current.onstart = () => {
+        console.log('🔴 Recording started');
+      };
+      
+      mediaRecorderRef.current.onstop = async () => {
+        console.log('⏹️ Recording stopped, processing with Whisper...');
+        
+        if (audioChunksRef.current.length === 0) {
+          console.warn('No audio data recorded');
+          return;
+        }
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
+        console.log('📦 Audio blob created:', audioBlob.size, 'bytes, type:', audioBlob.type);
+        
+        // Stop all tracks to release the microphone
+        stream.getTracks().forEach(track => {
+          track.stop();
+          console.log('🛑 Stopped track:', track.kind);
+        });
+        
+        await processWithWhisper(audioBlob);
+      };
+      
+      mediaRecorderRef.current.onerror = (event) => {
+        console.error('❌ MediaRecorder error:', event.error);
+      };
+      
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      setIsListening(true);
+      
+      console.log('🟢 Recording started successfully');
+      
+      // Auto-stop recording after 30 seconds to prevent infinite recording
+      recordingTimeoutRef.current = setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          console.log('⏰ Auto-stopping recording after 30 seconds');
+          stopWhisperRecording();
+        }
+      }, 30000);
+      
+    } catch (error) {
+      console.error('❌ Error starting Whisper recording:', error);
+      setIsRecording(false);
+      setIsListening(false);
+      
+      if (error.name === 'NotAllowedError') {
+        alert('Microphone permission denied. Please allow microphone access and try again.');
+      } else if (error.name === 'NotFoundError') {
+        alert('No microphone found. Please connect a microphone and try again.');
+      } else {
+        alert('Error accessing microphone: ' + error.message);
       }
     }
   };
-
-  const stopListening = () => {
-    console.log('Stopping speech recognition');
+  
+  const stopWhisperRecording = () => {
+    console.log('Stopping Whisper recording...');
     
-    // Stop Porcupine
-    if (webVoiceProcessorRef.current) {
-      try {
-        webVoiceProcessorRef.current.stop();
-      } catch (e) {
-        console.warn('Error stopping Porcupine:', e);
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = null;
+    }
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    
+    setIsRecording(false);
+    setIsListening(false);
+  };
+  
+  const processWithWhisper = async (audioBlob) => {
+    try {
+      console.log('🤖 Processing audio with Whisper API...');
+      console.log('📊 Audio blob details:', {
+        size: audioBlob.size,
+        type: audioBlob.type
+      });
+      
+      // Minimum size check
+      if (audioBlob.size < 1000) {
+        console.warn('⚠️ Audio blob too small:', audioBlob.size, 'bytes');
+        alert('Recording too short. Please speak longer.');
+        return;
+      }
+      
+      // Create FormData for Whisper API
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'audio.webm');
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'en');
+      formData.append('response_format', 'json');
+      
+      console.log('📤 Sending to Whisper API...');
+      
+      const response = await axios.post('/api/speech/transcribe', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 30000 // 30 second timeout
+      });
+      
+      console.log('📥 Whisper API response:', response.data);
+      
+      if (response.data && response.data.text) {
+        const transcribedText = response.data.text.trim();
+        console.log('✅ Whisper transcription successful:', transcribedText);
+        
+        if (transcribedText.length > 0) {
+          console.log('📝 Setting input value to:', transcribedText);
+          setInputValue(transcribedText);
+          
+          // Auto-send the transcribed text
+          if (transcribedText.length > 1) {
+            console.log('🚀 Auto-sending Whisper transcription in 500ms');
+            setTimeout(() => {
+              console.log('📨 Executing handleSendMessage with:', transcribedText);
+              handleSendMessage(transcribedText);
+            }, 500);
+          }
+        } else {
+          console.warn('⚠️ Empty transcription received');
+          alert('No speech detected. Please try speaking again.');
+        }
+      } else {
+        console.warn('⚠️ No transcription text in response');
+        alert('No transcription received. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Whisper transcription error:', error);
+      
+      // Detailed error logging
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+        console.error('Response headers:', error.response.headers);
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+      } else {
+        console.error('Error setting up request:', error.message);
+      }
+      
+      // User-friendly error messages
+      if (error.response?.status === 429) {
+        alert('Whisper API rate limit reached. Please wait a moment and try again.');
+      } else if (error.response?.status === 400) {
+        alert('Invalid audio format. Please try recording again.');
+      } else if (error.response?.status === 401) {
+        alert('Authentication error. Please check your OpenAI API key configuration.');
+      } else if (error.code === 'ECONNABORTED') {
+        alert('Request timed out. Please try with a shorter recording.');
+      } else {
+        alert('Transcription failed: ' + (error.response?.data?.error || error.message));
       }
     }
-    
-    // Stop speech recognition
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-    
-    setIsWakeWordMode(false);
-    setWakeWordDetected(false);
   };
 
   const toggleListening = () => {
-    if (isListening) {
-      stopListening();
+    if (isListening || isRecording) {
+      stopWhisperRecording();
     } else {
-      startListening(false);
+      startWhisperRecording();
     }
   };
 
-  const toggleWakeWordMode = () => {
-    console.log('Toggling wake word mode, current state:', isWakeWordMode);
-    if (isWakeWordMode) {
-      stopListening();
-    } else {
-      startListening(true);
-    }
-  };
-
-  // Text-to-speech function
+  // Text-to-speech function with enhanced debugging and voice loading
   const speakText = (text) => {
-    console.log('speakText called with:', { text, voiceEnabled, synthRef: !!synthRef.current });
+    console.log('speakText called with:', { 
+      text: text?.substring(0, 50) + '...', 
+      voiceEnabled, 
+      synthRef: !!synthRef.current,
+      synthSupported: 'speechSynthesis' in window
+    });
+    
+    if (!('speechSynthesis' in window)) {
+      console.error('Speech synthesis not supported in this browser');
+      return;
+    }
     
     if (!synthRef.current) {
-      console.warn('Speech synthesis not available');
-      return;
+      console.warn('Speech synthesis not initialized, trying to reinitialize...');
+      synthRef.current = window.speechSynthesis;
+      if (!synthRef.current) {
+        console.error('Failed to initialize speech synthesis');
+        return;
+      }
     }
     
     if (!voiceEnabled) {
@@ -732,93 +690,242 @@ const AIAvatar = () => {
       return;
     }
     
-    if (!text || typeof text !== 'string') {
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
       console.warn('Invalid text for TTS:', text);
       return;
     }
     
     // Cancel any current speech
-    synthRef.current.cancel();
+    try {
+      synthRef.current.cancel();
+      console.log('Cancelled any existing speech');
+    } catch (e) {
+      console.warn('Error cancelling existing speech:', e);
+    }
     
     // Stop listening to prevent audio feedback loop
     const wasListening = isListening;
-    const wasInWakeWordMode = isWakeWordMode;
     
-    if (isListening || isWakeWordMode) {
+    if (isListening) {
       console.log('Pausing speech recognition during TTS to prevent feedback loop');
-      stopListening();
+      stopWhisperRecording();
     }
     
-    const utterance = new SpeechSynthesisUtterance(text);
+    // Clean the text
+    const cleanText = text.trim();
+    console.log('Cleaned text for TTS:', cleanText.substring(0, 100));
+    
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 0.9;
-    utterance.pitch = 1;
-    utterance.volume = 1;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    utterance.lang = 'en-US';
     
-    // Get available voices and set a preferred one
-    const voices = synthRef.current.getVoices();
-    console.log('Available voices:', voices.length);
-    
-    if (voices.length > 0) {
-      // Try to find an English voice
-      const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-        console.log('Using voice:', englishVoice.name);
+    // Enhanced voice selection with fallback
+    const selectVoice = () => {
+      const voices = synthRef.current.getVoices();
+      console.log('Total voices available:', voices.length);
+      
+      if (voices.length === 0) {
+        console.warn('No voices available yet');
+        return null;
       }
+      
+      // Log all available voices for debugging
+      voices.forEach((voice, index) => {
+        console.log(`Voice ${index}: ${voice.name} (${voice.lang}) - ${voice.localService ? 'local' : 'remote'}`);
+      });
+      
+      // Priority order for voice selection
+      const voiceSelectors = [
+        // Prefer local English voices
+        voice => voice.lang.startsWith('en') && voice.localService,
+        // Any English voice
+        voice => voice.lang.startsWith('en'),
+        // Default voice (usually first one)
+        voice => voice.default,
+        // Any local voice
+        voice => voice.localService,
+        // First available voice
+        voice => true
+      ];
+      
+      for (const selector of voiceSelectors) {
+        const selectedVoice = voices.find(selector);
+        if (selectedVoice) {
+          console.log('Selected voice:', selectedVoice.name, selectedVoice.lang);
+          return selectedVoice;
+        }
+      }
+      
+      return voices[0] || null;
+    };
+    
+    const selectedVoice = selectVoice();
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    } else {
+      console.warn('No suitable voice found, using default');
     }
     
     utterance.onstart = () => {
-      console.log('TTS started - speech recognition paused');
+      console.log('✅ TTS started successfully - speech recognition paused');
       setIsSpeaking(true);
     };
     
     utterance.onend = () => {
-      console.log('TTS ended - resuming speech recognition if was active');
+      console.log('✅ TTS ended successfully - resuming speech recognition if was active');
       setIsSpeaking(false);
       
       // Resume listening if it was active before
-      if (wasListening || wasInWakeWordMode) {
+      if (wasListening) {
+        console.log('Resuming speech recognition after TTS completion');
         setTimeout(() => {
-          if (wasInWakeWordMode) {
-            startListening(true); // Resume wake word mode
-          } else if (wasListening) {
-            startListening(false); // Resume normal listening
-          }
-        }, 500); // Small delay to ensure TTS is fully stopped
+          // Don't auto-restart recording after TTS - user can manually start
+          console.log('TTS ended, ready for new recording');
+        }, 750);
       }
     };
     
     utterance.onerror = (event) => {
-      console.error('TTS error:', event.error);
+      console.error('❌ TTS error occurred:', {
+        error: event.error,
+        message: event.message,
+        type: event.type
+      });
       setIsSpeaking(false);
       
       // Resume listening if it was active before
-      if (wasListening || wasInWakeWordMode) {
+      if (wasListening) {
+        console.log('Resuming speech recognition after TTS error');
         setTimeout(() => {
-          if (wasInWakeWordMode) {
-            startListening(true);
-          } else if (wasListening) {
-            startListening(false);
-          }
+          console.log('TTS error handled, ready for new recording');
         }, 500);
       }
     };
     
-    console.log('Starting TTS for text:', text.substring(0, 50) + '...');
-    synthRef.current.speak(utterance);
+    utterance.onpause = () => {
+      console.log('TTS paused');
+    };
+    
+    utterance.onresume = () => {
+      console.log('TTS resumed');
+    };
+    
+    utterance.onmark = (event) => {
+      console.log('TTS mark event:', event);
+    };
+    
+    // Additional debugging for speech synthesis state
+    console.log('Speech synthesis state before speaking:', {
+      speaking: synthRef.current.speaking,
+      pending: synthRef.current.pending,
+      paused: synthRef.current.paused
+    });
+    
+    try {
+      console.log('🔊 Starting TTS for text:', cleanText.substring(0, 100) + (cleanText.length > 100 ? '...' : ''));
+      synthRef.current.speak(utterance);
+      
+      // Additional verification after speak call
+      setTimeout(() => {
+        console.log('Speech synthesis state after speak call:', {
+          speaking: synthRef.current.speaking,
+          pending: synthRef.current.pending,
+          paused: synthRef.current.paused
+        });
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ Error calling speak():', error);
+      setIsSpeaking(false);
+      
+      // Resume listening if it was active before
+      if (wasListening) {
+        setTimeout(() => {
+          console.log('Speak error handled, ready for new recording');
+        }, 500);
+      }
+    }
   };
 
   const toggleVoice = () => {
+    console.log('Toggling voice, current state:', voiceEnabled);
+    
     if (isSpeaking) {
+      console.log('Cancelling current speech...');
       synthRef.current?.cancel();
       setIsSpeaking(false);
     }
-    setVoiceEnabled(!voiceEnabled);
+    
+    const newVoiceEnabled = !voiceEnabled;
+    setVoiceEnabled(newVoiceEnabled);
+    
+    // If enabling voice, ensure speech synthesis is properly initialized
+    if (newVoiceEnabled && (!synthRef.current || synthRef.current.getVoices().length === 0)) {
+      console.log('Reinitializing speech synthesis...');
+      if ('speechSynthesis' in window) {
+        synthRef.current = window.speechSynthesis;
+        
+        // Force voice loading
+        setTimeout(() => {
+          const voices = synthRef.current.getVoices();
+          console.log('Voices after reinitialization:', voices.length);
+          if (voices.length === 0) {
+            // Try the dummy utterance trick
+            const dummyUtterance = new SpeechSynthesisUtterance('');
+            dummyUtterance.volume = 0;
+            try {
+              synthRef.current.speak(dummyUtterance);
+            } catch (e) {
+              console.warn('Error with reinitialization dummy utterance:', e);
+            }
+          }
+        }, 100);
+      }
+    }
+    
+    console.log('Voice toggled to:', newVoiceEnabled);
+  };
+
+  const testWhisperFlow = () => {
+    console.log('🧪 Testing Whisper flow with dummy text...');
+    const testText = "This is a test of the Whisper transcription flow.";
+    console.log('📝 Setting test text:', testText);
+    setInputValue(testText);
+    
+    setTimeout(() => {
+      console.log('🚀 Auto-sending test text');
+      handleSendMessage(testText);
+    }, 1000);
   };
 
   const testTTS = () => {
-    console.log('Testing TTS...');
-    speakText("Hello, this is a test of the text to speech system.");
+    console.log('🧪 Testing TTS...');
+    console.log('Browser support:', {
+      speechSynthesis: 'speechSynthesis' in window,
+      SpeechSynthesisUtterance: 'SpeechSynthesisUtterance' in window
+    });
+    
+    if (!('speechSynthesis' in window)) {
+      alert('Speech synthesis not supported in this browser');
+      return;
+    }
+    
+    const testText = "Hello, this is a test of the text to speech system. Can you hear me?";
+    console.log('Test text:', testText);
+    
+    // Show current speech synthesis state
+    if (synthRef.current) {
+      console.log('Current speech synthesis state:', {
+        speaking: synthRef.current.speaking,
+        pending: synthRef.current.pending,
+        paused: synthRef.current.paused,
+        voicesCount: synthRef.current.getVoices().length
+      });
+    }
+    
+    speakText(testText);
   };
 
   const handleGenerateUrl = () => {
@@ -869,26 +976,16 @@ const AIAvatar = () => {
               </Typography>
             )}
             {/* Speech Status Indicator */}
-            {(isListening || isSpeaking || isWakeWordMode) && (
+            {(isListening || isSpeaking || isRecording) && (
               <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                {isListening && !isWakeWordMode && (
-                  <Typography variant="caption" sx={{ color: '#f44336', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <MicIcon fontSize="small" /> Listening...
-                  </Typography>
-                )}
-                {isListening && isWakeWordMode && (
-                  <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <MicIcon fontSize="small" /> Listening for "Hey Brandon"...
+                {isRecording && (
+                  <Typography variant="caption" sx={{ color: '#9c27b0', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <MicIcon fontSize="small" /> Recording (Whisper AI)...
                   </Typography>
                 )}
                 {isSpeaking && (
                   <Typography variant="caption" sx={{ color: '#2196f3', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <VolumeUpIcon fontSize="small" /> Speaking...
-                  </Typography>
-                )}
-                {isWakeWordMode && !isListening && (
-                  <Typography variant="caption" sx={{ color: '#4caf50', fontWeight: 'bold' }}>
-                    👂 Wake Word Mode Active (Say wake word + "Brandon")
                   </Typography>
                 )}
               </Box>
@@ -980,38 +1077,21 @@ const AIAvatar = () => {
 
               {/* Speech Controls */}
               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mt: 2 }}>
-                {/* Microphone Button */}
+                {/* Microphone Button for Whisper Recording */}
                 <Fab
-                  color={isListening ? 'secondary' : 'primary'}
+                  color={isListening || isRecording ? 'secondary' : 'primary'}
                   onClick={toggleListening}
                   disabled={!isConnected}
                   size="small"
                   sx={{ 
-                    backgroundColor: isListening ? '#f44336' : '#2196f3',
+                    backgroundColor: (isListening || isRecording) ? '#9c27b0' : '#2196f3',
                     '&:hover': {
-                      backgroundColor: isListening ? '#d32f2f' : '#1976d2'
+                      backgroundColor: (isListening || isRecording) ? '#7b1fa2' : '#1976d2'
                     }
                   }}
+                  title="Record with Whisper AI"
                 >
-                  {isListening ? <MicIcon /> : <MicOffIcon />}
-                </Fab>
-                
-                {/* Wake Word Mode Toggle */}
-                <Fab
-                  color={isWakeWordMode ? 'success' : 'default'}
-                  onClick={toggleWakeWordMode}
-                  disabled={!isConnected}
-                  size="small"
-                  sx={{ 
-                    backgroundColor: isWakeWordMode ? '#4caf50' : '#e0e0e0',
-                    color: isWakeWordMode ? 'white' : '#757575',
-                    '&:hover': {
-                      backgroundColor: isWakeWordMode ? '#388e3c' : '#d5d5d5'
-                    }
-                  }}
-                  title="Wake Word Mode (Hey Brandon)"
-                >
-                  <VolumeUpIcon fontSize="small" />
+                  {(isListening || isRecording) ? <MicIcon /> : <MicOffIcon />}
                 </Fab>
                 
                 {/* Voice Response Toggle */}
@@ -1041,6 +1121,17 @@ const AIAvatar = () => {
                   sx={{ ml: 1 }}
                 >
                   Test Voice
+                </Button>
+                
+                {/* Test Whisper Flow Button */}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={testWhisperFlow}
+                  disabled={!isConnected}
+                  sx={{ ml: 1, backgroundColor: '#f3e5f5', color: '#9c27b0', borderColor: '#9c27b0' }}
+                >
+                  Test Flow
                 </Button>
               </Box>
             </Paper>

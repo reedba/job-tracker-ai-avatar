@@ -40,6 +40,11 @@ Rails.application.routes.draw do
         post :start_session
       end
     end
+    
+    # Speech endpoints for AI Avatar (Whisper integration)
+    namespace :speech do
+      post :transcribe
+    end
   end
 
   # Health check endpoint
